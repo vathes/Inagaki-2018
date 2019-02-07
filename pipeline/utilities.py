@@ -26,40 +26,24 @@ def parse_prefix(line):
             return None    
 
 
-def find_session_matched_nwbfile(sess_data_dir, animal_id, date_of_experiment):
+def find_session_matched_matfile(sess_data_dir, key):
         ############## Dataset #################
-        sess_data_files = os.listdir(sess_data_dir)
-        which_data = re.search('extracellular|whole_cell',sess_data_dir).group()
-        # Search the filenames to find a match for "this" session (based on key)
         sess_data_file = None
-        for s in sess_data_files:
-            try:
-                temp_nwb = h5.File(os.path.join(sess_data_dir,s), 'r')
-            except:
-                print(f'!!! error load file: {s}')   
-                continue
-            # read subject_id out of this file
-            subject_id = temp_nwb['general']['subject']['subject_id'].value.decode('UTF-8').lower()
-            
-            # -- session_time - due to error in extracellular dataset (session_start_time error), need to hard code here...
-            if which_data == 'whole_cell':  # case: whole cell
-                session_start_time = temp_nwb['session_start_time'].value
-                session_start_time = parse_prefix(session_start_time)
-            elif which_data == 'extracellular':# case: extracellular
-                identifier = temp_nwb['identifier'].value
-                session_start_time = re.split(';\s?',identifier)[-1].replace('T',' ')
-                session_start_time = parse_prefix(session_start_time) 
-            
-            # compare key with extracted info from this file
-            if (animal_id == subject_id) and (date_of_experiment == session_start_time):
-                # if true, meaning the current "nwb" variable is a match with this session
-                sess_data_file = s
-                break
-            temp_nwb.close()
-                    
+        which_data = re.search('Probe|WholeCell', sess_data_dir).group()
+        # Search the filenames to find a match for "this" session (based on key)
+        if which_data == 'WholeCell':
+            cell_id = key['cell_id']
+            exp_type = re.search('regular|EPSP',
+                                 ';'.join((acquisition.Session.ExperimentType & key).fetch(
+                                     'experiment_type'))).group()
+            fnames = (f for f in os.listdir(sess_data_dir) if f.find('.mat') != -1)
+            for f in fnames:
+                if f.find(f'{cell_id}_{exp_type}') != -1:
+                    sess_data_file = f
+                    break
         # If session not found from dataset, break
         if sess_data_file is None:
-            print(f'Session not found! - Subject: {animal_id} - Date: {date_of_experiment}')
+            print(f'Session not found! - Subject: {key["subject_id"]} - Date: {key["session_time"]}')
             return None
         else: 
             print(f'Found datafile: {sess_data_file}')

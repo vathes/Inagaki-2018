@@ -3,6 +3,7 @@ Schema of aquisition information.
 '''
 import re
 import os
+import sys
 from datetime import datetime
 
 import numpy as np
@@ -20,16 +21,17 @@ class ExperimentType(dj.Lookup):
     definition = """
     experiment_type: varchar(64)
     """
-    contents = zip(['behavior', 'extracellular', 'intracellular', 'photostim'])
+    contents = zip(['behavior', 'extracellular', 'photostim',
+                    'intracellular_regular', 'intracellular_EPSP'])  # regular: no current injection, EPSP: negative current injection
 
 
 @schema
 class Session(dj.Manual):
     definition = """
+    session_id: varchar(32)
+    ---
     -> subject.Subject
     session_time: datetime    # session time
-    session_type: enum('extracellular', 'whole_cell_regular', 'whole_cell_EPSP')  # 'regular': no current injection, 'EPSP': negative current injection
-    ---
     session_directory = "": varchar(256)
     session_note = "" : varchar(256) 
     """
@@ -133,40 +135,52 @@ class IntracellularAcquisition(dj.Imported):
         definition = """
         -> master
         ---
-        current_injection: longblob
+        injected_current: float  # (pA) amplitude setting of the current injection routine
+        current_injection: longblob  # (nA)
         current_injection_start_time: float  # first timepoint of current injection recording
         current_injection_sampling_rate: float  # (Hz) sampling rate of current injection recording
+        """
+
+    class Spike(dj.Part):
+        definition = """
+        -> master
+        ---
+        spike_times: longblob  # (s) time of each spike, with respect to the start of session 
         """
         
     def make(self, key):
         # ============ Dataset ============
-        sess_data_dir = os.path.join('..', 'data', 'whole_cell_nwb2.0')
+        sess_data_dir = os.path.join('.', 'data', 'WholeCellData', 'Data')
         # Get the Session definition from the keys of this session
-        animal_id = key['subject_id']
-        date_of_experiment = key['session_time']
-        # Search the files in filenames to find a match for "this" session (based on key)
-        sess_data_file = utilities.find_session_matched_nwbfile(sess_data_dir, animal_id, date_of_experiment)
-        if sess_data_file is None: 
-            print(f'IntracellularAcquisition import failed for: {animal_id} - {date_of_experiment}')
+        sess_data_file = utilities.find_session_matched_matfile(sess_data_dir, key)
+        if sess_data_file is None:
+            print(f'Intracellular import failed: ({key["subject_id"]} - {key["session_time"]})', file=sys.stderr)
             return
-        nwb = h5.File(os.path.join(sess_data_dir, sess_data_file), 'r')
+
+        mat_data = sio.loadmat(os.path.join(sess_data_dir, sess_data_file),
+                               struct_as_record = False, squeeze_me = True)['wholeCell']
+
         #  ============= Now read the data and start ingesting =============
         self.insert1(key)
-        print('Insert intracellular data for: subject: {0} - date: {1} - cell: {2}'.format(key['subject_id'], key['session_time'], key['cell_id']))
+        print(f'Insert intracellular data for: {key["cell_id"]}')
         # -- MembranePotential
-        membrane_potential_time_stamps = nwb['acquisition']['timeseries']['membrane_potential']['timestamps'].value
-        self.MembranePotential.insert1(dict(key,
-            membrane_potential=nwb['acquisition']['timeseries']['membrane_potential']['data'].value,
-            membrane_potential_wo_spike=nwb['analysis']['Vm_wo_spikes']['membrane_potential_wo_spike']['data'].value,
-            membrane_potential_start_time=membrane_potential_time_stamps[0],
-            membrane_potential_sampling_rate=1/np.mean(np.diff(membrane_potential_time_stamps))))
-        # -- CurrentInjection
-        current_injection_time_stamps = nwb['acquisition']['timeseries']['current_injection']['timestamps'].value
-        self.CurrentInjection.insert1(dict(key,
-            current_injection=nwb['acquisition']['timeseries']['current_injection']['data'].value,
-            current_injection_start_time=current_injection_time_stamps[0],
-            current_injection_sampling_rate=1/np.mean(np.diff(current_injection_time_stamps))))
-        nwb.close()
+        self.MembranePotential.insert1(dict(
+            key,
+            membrane_potential=mat_data.recording_data.Vm,
+            membrane_potential_wo_spike=mat_data.recording_data.Vm_wo_spike,
+            membrane_potential_start_time=0,
+            membrane_potential_sampling_rate=mat_data.recording_data.sample_rate))
+        # -- Spike
+        self.Spike.insert1(dict(
+            key,
+            spike_times=mat_data.recording_data.spike_peak_bin / mat_data.recording_data.sample_rate))
+        # -- CurrentInjection - only available for EPSP session
+        if re.search('EPSP', ';'.join((Session.ExperimentType & key).fetch('experiment_type'))):
+            self.CurrentInjection.insert1(dict(
+                key,
+                current_injection=mat_data.recording_data.Output_700B,
+                current_injection_start_time=0,
+                current_injection_sampling_rate=mat_data.recording_data.sample_rate))
 
     
 @schema
