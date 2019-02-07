@@ -20,7 +20,7 @@ class ExperimentType(dj.Lookup):
     definition = """
     experiment_type: varchar(64)
     """
-    contents = [['behavior'], ['extracelluar'], ['photostim']]
+    contents = zip(['behavior', 'extracellular', 'intracellular', 'photostim'])
 
 
 @schema
@@ -28,6 +28,7 @@ class Session(dj.Manual):
     definition = """
     -> subject.Subject
     session_time: datetime    # session time
+    session_type: enum('extracellular', 'whole_cell_regular', 'whole_cell_EPSP')  # 'regular': no current injection, 'EPSP': negative current injection
     ---
     session_directory = "": varchar(256)
     session_note = "" : varchar(256) 
@@ -105,8 +106,9 @@ class Cell(dj.Manual):
     -> Session
     cell_id: varchar(36) # a string identifying the cell in which this intracellular recording is concerning
     ---
-    cell_type: enum('excitatory','inhibitory','N/A')
-    -> reference.ActionLocation
+    cell_type: enum('Pyr', 'GABA', 'excitatory', 'inhibitory', 'N/A')
+    depth: float  # (um)
+    -> reference.BrainLocation
     -> reference.WholeCellDevice
     """    
   
@@ -267,7 +269,6 @@ class TrialSet(dj.Imported):
         -> reference.TrialType
         -> reference.TrialResponse
         trial_stim_present: bool  # is this a stim or no-stim trial
-        trial_is_good: bool  # is this a good or bad trial
         """
         
     class EventTime(dj.Part):

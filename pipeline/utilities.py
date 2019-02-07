@@ -9,8 +9,8 @@ from . import reference, acquisition
 
 
 # datetime format - should probably read this from a config file and not hard coded here
-datetimeformat_ymdhms = '%Y-%m-%d %H:%M:%S'
-datetimeformat_ymd = '%Y-%m-%d'
+datetimeformat_ymdhms = '%Y%m%d'
+datetimeformat_ymd = '%m%d%y'
 
 def parse_prefix(line):
     cover = len(datetime.now().strftime(datetimeformat_ymdhms))

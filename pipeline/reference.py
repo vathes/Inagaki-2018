@@ -12,7 +12,9 @@ class WholeCellDevice(dj.Lookup):
     device_name: varchar(32)
     ---
     device_desc = "": varchar(1024)
-    """   
+    """
+    contents = [['Multiclamp 700B',
+                 'Amplified by Multiclamp 700B (Molecular Devices) and sampled at 20 kHz using WaveSurfer (wavesurfer.janelia.org)']]
 
 
 @schema
@@ -86,7 +88,7 @@ class AnimalSource(dj.Lookup):
     definition = """
     animal_source: varchar(32)      # source of the animal, Jax, Charles River etc.
     """
-    contents = zip(['Jackson', 'Charles River', 'Guoping Feng', 'Homemade'])
+    contents = zip(['Jackson', 'Charles River', 'Guoping Feng', 'Homemade', 'N/A'])
 
 
 @schema
@@ -161,10 +163,14 @@ class ExperimentalEvent(dj.Lookup):
     ---
     description: varchar(256)    
     """
-    contents = zip(['trial_start', 'trial_stop', 'cue_start', 'cue_end', 'pole_in', 'pole_out'],
+    contents = zip(['trial_start', 'trial_stop',
+                    'cue_start', 'cue_end',
+                    'sampling_start', 'delay_start',
+                    'current_injection_start'],
                    ['trial start time', 'trial end time',
                     'onset of auditory cue', 'offset of auditory cue',
-                    'onset of pole moving in', 'onset of pole moving out'])
+                    'onset of sample period (either pole movement or auditory)', 'onset of the delay period',
+                    'onset of current inject'])
 
     
 @schema
