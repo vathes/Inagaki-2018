@@ -1,0 +1,23 @@
+version: '3'
+services:
+  datajoint:
+    build: .
+    environment:
+      - DJ_HOST=db_template_project
+      - DJ_USER=root
+      - DJ_PASS=simple
+    volumes:
+      - ./notebooks:/notebooks
+      - ./images:/images
+      - .:/src/template_project
+      - ./data:/data
+    links:
+      - db_template_project
+    ports:
+      - "8891:8888"
+  db_template_project:
+    image: datajoint/mysql
+    environment:
+      - MYSQL_ROOT_PASSWORD=simple
+    ports:
+      - "4306:3306"
