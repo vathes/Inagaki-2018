@@ -72,6 +72,7 @@ for fname in fnames:
                         session_id=uuid.uuid4().hex,
                         session_time=session_time)
 
+    experimenters = ['Hidehiko Inagaki']  # hard-coded here
     experiment_types = this_sess.experiment_type
     experiment_types = [experiment_types] if isinstance(experiment_types, str) else experiment_types
     experiment_types.append(f'intracellular_{re.search("regular|EPSP", fname).group()}')
@@ -83,6 +84,7 @@ for fname in fnames:
     if session_info not in acquisition.Session.proj():
         with acquisition.Session.connection.transaction:
             acquisition.Session.insert1(session_info, ignore_extra_fields=True)
+            acquisition.Session.Experimenter.insert((dict(session_info, experiment_type=k) for k in experimenters), ignore_extra_fields=True)
             acquisition.Session.ExperimentType.insert((dict(session_info, experiment_type=k) for k in experiment_types), ignore_extra_fields=True)
         print(f'\nCreating Session - Subject: {subject_info["subject_id"]} - Date: {session_info["session_time"]}')
 
@@ -104,7 +106,7 @@ for fname in fnames:
     cell_key = dict({**session_info, **brain_location},
                     cell_id=cell_id,
                     cell_type=mat_data.Pyr_or_GABA,
-                    depth=float(this_sess.depth_um),
+                    cell_depth=float(this_sess.depth_um),
                     device_name=ie_device)
 
     if cell_key not in acquisition.Cell.proj():
@@ -122,8 +124,10 @@ for fname in fnames:
             trial_key['start_time'] = mat_data.behavioral_data.trial_onset_bin[tr_idx] / fs
             trial_key['stop_time'] = trial_key['start_time'] + events_time.end_time
             trial_key['trial_stim_present'] = bool(mat_data.behavioral_data.AOM_on_or_off[tr_idx])
+            trial_key['trial_is_good'] = True  #  no info of trial good/bad status, assuming all trials are good
             trial_key['trial_type'], trial_key['trial_response'] = trial_type_and_response_dict[
                 mat_data.behavioral_data.trial_type_vector[tr_idx]]
+            trial_key['delay_duration'] = 1.2  # hard-coded here (the same for whole cell)
             acquisition.TrialSet.Trial.insert1(trial_key, ignore_extra_fields = True, skip_duplicates = True,
                                                allow_direct_insert = True)
 
@@ -133,6 +137,9 @@ for fname in fnames:
                 events_time.__dict__,
                 trial_start=trial_key['start_time'],
                 trial_stop=trial_key['stop_time'],
+                first_lick = min([events_time.__getattribute__(l)[0]
+                                  for l in ('lickL_on_time', 'lickR_on_time')
+                                  if events_time.__getattribute__(l).size > 0]),
                 current_injection_start=mat_data.behavioral_data.tail_current_injection_onset_bin[tr_idx] / fs)[k])
                                                    for k in ['trial_start', 'trial_stop', 'cue_start',
                                                              'cue_end', 'sampling_start', 'delay_start',

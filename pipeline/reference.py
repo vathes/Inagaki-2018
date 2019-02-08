@@ -29,9 +29,9 @@ class Probe(dj.Lookup):
         -> master
         channel_id:         smallint     # id of a channel on the probe
         ---
-        channel_x_pos:  float   # x position relative to the tip of the probe (um)
-        channel_y_pos:  float   # y position relative to the tip of the probe (um)
-        channel_z_pos:  float   # y position relative to the tip of the probe (um)
+        channel_x_pos=null:  float   # x position relative to the tip of the probe (um)
+        channel_y_pos=null:  float   # y position relative to the tip of the probe (um)
+        channel_z_pos=null:  float   # y position relative to the tip of the probe (um)
         shank_id: smallint  # the shank id of this probe this channel is located on 
         """
 
@@ -47,9 +47,9 @@ class CorticalLayer(dj.Lookup):
 @schema
 class Hemisphere(dj.Lookup):
     definition = """
-    hemisphere: varchar(8)
+    hemisphere: varchar(16)
     """
-    contents = zip(['left', 'right'])
+    contents = zip(['left', 'right', 'bilateral'])
 
 
 @schema
@@ -166,11 +166,11 @@ class ExperimentalEvent(dj.Lookup):
     contents = zip(['trial_start', 'trial_stop',
                     'cue_start', 'cue_end',
                     'sampling_start', 'delay_start',
-                    'current_injection_start'],
+                    'current_injection_start', 'first_lick'],
                    ['trial start time', 'trial end time',
                     'onset of auditory cue', 'offset of auditory cue',
                     'onset of sample period (either pole movement or auditory)', 'onset of the delay period',
-                    'onset of current inject'])
+                    'onset of current inject', 'time of the mouse 1st lick in this trial'])
 
     
 @schema
@@ -178,7 +178,7 @@ class TrialType(dj.Lookup):
     definition = """ # The experimental type of this trial, e.g. Lick Left vs Lick Right
     trial_type: varchar(32)
     """
-    contents = zip(['lick left', 'lick right', 'non-performing', 'N/A'])
+    contents = zip(['lick left', 'lick right', 'non-performing', 'photo-tagging', 'N/A'])
     
     
 @schema

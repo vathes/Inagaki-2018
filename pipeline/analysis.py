@@ -61,26 +61,6 @@ class RealignedEvent(dj.Computed):
                                              realigned_event_time=event_times[e_idx] - eoi_time_point)
                                         for e_idx, eve in enumerate(events))
 
-
-@schema
-class TrialSegmentedExtracellular(dj.Computed):
-    definition = """
-    -> acquisition.ExtracellularAcquisition
-    -> acquisition.TrialSet.Trial
-    -> TrialSegmentationSetting
-    """
-    
-    class Voltage(dj.Part):
-        definition = """
-        -> master
-        ---
-        segmented_voltage: longblob   
-        """
-        
-    def make(self, key):
-        # make() implementation goes here
-        return
-    
     
 @schema
 class TrialSegmentedIntracellular(dj.Computed):

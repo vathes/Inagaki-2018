@@ -109,7 +109,7 @@ class Cell(dj.Manual):
     cell_id: varchar(36) # a string identifying the cell in which this intracellular recording is concerning
     ---
     cell_type: enum('Pyr', 'GABA', 'excitatory', 'inhibitory', 'N/A')
-    depth: float  # (um)
+    cell_depth: float  # (um)
     -> reference.BrainLocation
     -> reference.WholeCellDevice
     """    
@@ -191,26 +191,6 @@ class ProbeInsertion(dj.Manual):
     -> reference.Probe
     -> reference.ActionLocation
     """    
-    
-
-@schema
-class ExtracellularAcquisition(dj.Imported):
-    definition = """ # Raw extracellular recording, channel x time (e.g. LFP)
-    -> ProbeInsertion
-    """    
-    
-    class Voltage(dj.Part):
-        definition = """
-        -> master
-        ---
-        voltage: longblob   # (mV)
-        voltage_start_time: float # (second) first timepoint of voltage recording
-        voltage_sampling_rate: float # (Hz) sampling rate of voltage recording
-        """
-        
-    def make(self, key):
-        # this function implements the ingestion of raw extracellular data into the pipeline
-        return None
 
 
 @schema
@@ -222,9 +202,7 @@ class UnitSpikeTimes(dj.Imported):
     -> reference.Probe.Channel
     spike_times: longblob  # (s) time of each spike, with respect to the start of session 
     unit_cell_type: varchar(32)  # e.g. cell-type of this unit (e.g. wide width, narrow width spiking)
-    unit_x: float  # (mm)
-    unit_y: float  # (mm)
-    unit_z: float  # (mm)
+    unit_depth: float  # (mm)
     spike_waveform: longblob  # waveform(s) of each spike at each spike time (spike_time x waveform_timestamps)
     """
         
@@ -284,6 +262,8 @@ class TrialSet(dj.Imported):
         -> reference.TrialType
         -> reference.TrialResponse
         trial_stim_present: bool  # is this a stim or no-stim trial
+        trial_is_good: bool  # good/bad status of trial (bad trials are not analyzed)
+        delay_duration: float  # (s) duration of the delay period
         """
         
     class EventTime(dj.Part):
