@@ -178,6 +178,7 @@ class IntracellularAcquisition(dj.Imported):
         if re.search('EPSP', ';'.join((Session.ExperimentType & key).fetch('experiment_type'))):
             self.CurrentInjection.insert1(dict(
                 key,
+                injected_current=mat_data.meta_data.injected_current,
                 current_injection=mat_data.recording_data.Output_700B,
                 current_injection_start_time=0,
                 current_injection_sampling_rate=mat_data.recording_data.sample_rate))

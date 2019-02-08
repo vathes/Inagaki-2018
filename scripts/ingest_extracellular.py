@@ -16,7 +16,7 @@ from pipeline import reference, subject, acquisition, stimulation, analysis #, b
 from pipeline import utilities
 
 # ================== Dataset ==================
-path = os.path.join('.', 'data', 'WholeCellData', 'Data')
+path = os.path.join('.', 'data', 'SiliconProbeData', 'Data')
 fnames = os.listdir(path)
 
 xlsname = 'SI_table_1_wc_cell_list.xlsx'
@@ -29,7 +29,7 @@ meta_data.columns = ['experiment_type', 'depth_um',
                      'correct_contra_trial_count', 'correct_ipsi_trial_count',
                      'performance',
                      'delay_selectivity_SR', 'delay_selectivity_Vm',
-                     'subject_id', 'genotype', 'date_of_birth', 'session_time',
+                     'subject_id', 'strain', 'date_of_birth', 'session_time',
                      'current_injection', 'from_guo_inagaki_2017']
 
 trial_type_and_response_dict = {1: ('lick right', 'correct'),
@@ -86,29 +86,8 @@ for fname in fnames:
             acquisition.Session.ExperimentType.insert((dict(session_info, experiment_type=k) for k in experiment_types), ignore_extra_fields=True)
         print(f'\nCreating Session - Subject: {subject_info["subject_id"]} - Date: {session_info["session_time"]}')
 
-    # ==================== Intracellular ====================
-    # no info on recording device, brain location of cell available from data, hard-coded from the paper
+    # ==================== Extracellular ====================
 
-    ie_device = 'Multiclamp 700B'
-    brain_region = 'ALM'
-    hemisphere = 'left'
-    brain_location = {'brain_region': brain_region,
-                      'brain_subregion': 'N/A',
-                      'cortical_layer': 'N/A',
-                      'hemisphere': hemisphere}
-    if brain_location not in reference.BrainLocation.proj():
-        reference.BrainLocation.insert1(brain_location)
-
-    # -- Cell
-    cell_id = f'cell_{mat_data.cell_id}'
-    cell_key = dict({**session_info, **brain_location},
-                    cell_id=cell_id,
-                    cell_type=mat_data.Pyr_or_GABA,
-                    depth=float(this_sess.depth_um),
-                    device_name=ie_device)
-
-    if cell_key not in acquisition.Cell.proj():
-        acquisition.Cell.insert1(cell_key, ignore_extra_fields=True)
 
     # ==================== Trials ====================
     fs = mat_data.recording_data.sample_rate
@@ -145,6 +124,5 @@ for fname in fnames:
 
 # ====================== Starting import and compute procedure ======================
 print('======== Populate() Routine =====')
-# -- Intracellular
-acquisition.IntracellularAcquisition.populate()
+
 
