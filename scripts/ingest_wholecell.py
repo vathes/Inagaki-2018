@@ -124,7 +124,7 @@ for fname in fnames:
         acquisition.TrialSet.insert1(trial_key, allow_direct_insert=True, ignore_extra_fields = True)
 
         for tr_idx, events_time in tqdm(enumerate(mat_data.behavioral_data.behav_timing)):
-            trial_key['trial_id'] = tr_idx + 1  # based on MATLAB 1-based indexing
+            trial_key['trial_id'] = tr_idx
             trial_key['start_time'] = mat_data.behavioral_data.trial_onset_bin[tr_idx] / fs
             trial_key['stop_time'] = trial_key['start_time'] + events_time.end_time
             trial_key['trial_stim_present'] = bool(mat_data.behavioral_data.AOM_on_or_off[tr_idx])

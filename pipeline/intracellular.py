@@ -67,13 +67,14 @@ class CurrentInjection(dj.Imported):
     definition = """
     -> Cell
     ---
+    injected_current: float  # (pA) amplitude setting of the current injection routine
     current_injection: longblob
     current_injection_start_time: float  # first timepoint of current injection recording
     current_injection_sampling_rate: float  # (Hz) sampling rate of current injection recording
     """
     
     # -- CurrentInjection - only available for EPSP session
-    key_source = (Cell & (acquisition.Session.ExperimentType & 'experiment_type = "EPSP"')).fetch('KEY')
+    key_source = Cell & (acquisition.Session.ExperimentType & 'experiment_type = "EPSP"')
 
     def make(self, key):
         # ============ Dataset ============
@@ -88,14 +89,14 @@ class CurrentInjection(dj.Imported):
 
         #  ============= Now read the data and start ingesting =============
         print(f'Insert current injection data for: {key["cell_id"]}')
-        self.CurrentInjection.insert1(dict(
+        self.insert1(dict(
             key,
             injected_current=mat_data.meta_data.injected_current,
             current_injection=mat_data.recording_data.Output_700B,
             current_injection_start_time=0,
             current_injection_sampling_rate=mat_data.recording_data.sample_rate))
 
-
+@schema
 class Spike(dj.Imported):
     definition = """
     -> Cell
@@ -117,7 +118,7 @@ class Spike(dj.Imported):
         #  ============= Now read the data and start ingesting =============
         print(f'Insert spikes data for: {key["cell_id"]}')
         # -- Spike
-        self.Spike.insert1(dict(
+        self.insert1(dict(
             key,
             spike_times=mat_data.recording_data.spike_peak_bin / mat_data.recording_data.sample_rate))
 

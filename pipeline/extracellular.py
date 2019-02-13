@@ -86,11 +86,42 @@ class TrialSegmentedUnitSpikeTimes(dj.Imported):
     """
 
     def make(self, key):
+        # get data
         sess_data_dir = os.path.join('.', 'data', 'SiliconProbeData')
         sess_data_file = utilities.find_session_matched_matfile(sess_data_dir, key)
 
         if sess_data_file is None:
             print(f'Extracellular import failed: ({key["subject_id"]} - {key["session_time"]})', file=sys.stderr)
             return
-
         mat_units = sio.loadmat(sess_data_file, struct_as_record = False, squeeze_me = True)['unit']
+
+        # get event, pre/post stim duration
+        event_name, pre_stim_dur, post_stim_dur = (analysis.TrialSegmentationSetting & key).fetch1(
+            'event', 'pre_stim_duration', 'post_stim_duration')
+        # get event time
+        try:
+            event_time_point = analysis.get_event_time(event_name, key)
+        except analysis.EventChoiceError as e:
+            print(f'Trial segmentation error - Msg: {str(e)}')
+            return
+
+        pre_stim_dur = float(pre_stim_dur)
+        post_stim_dur = float(post_stim_dur)
+        # check if pre/post stim dur is within start/stop time
+        trial_start, trial_stop = (acquisition.TrialSet.Trial & key).fetch1('start_time', 'stop_time')
+        if trial_start and event_time_point - pre_stim_dur < trial_start:
+            print('Warning: Out of bound prestimulus duration, set to 0')
+            pre_stim_dur = 0
+        if trial_stop and event_time_point + post_stim_dur > trial_stop:
+            print('Warning: Out of bound poststimulus duration, set to trial end time')
+            post_stim_dur = trial_stop - event_time_point
+
+        # get raw & segment
+        spike_times = (UnitSpikeTimes & key).fetch1('spike_times')[
+            mat_units[key['unit_id']].Trial_idx_of_spike - 1 == key['trial_id']]  # -1 to account for MATLAB 1-based indexing
+        key['segmented_spike_times'] = spike_times[np.logical_and(
+            (spike_times >= (event_time_point - pre_stim_dur)),
+            (spike_times <= (event_time_point + post_stim_dur)))] - event_time_point
+
+        self.insert1(key)
+        print(f'Perform trial-segmentation of spike times for unit: {key["unit_id"]} and trial: {key["trial_id"]}')

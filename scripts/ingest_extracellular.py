@@ -109,15 +109,16 @@ for fname in fnames:
             print('\nInsert trial information')
             acquisition.TrialSet.insert1(trial_key, allow_direct_insert=True, ignore_extra_fields = True)
 
-            for tr_idx in tqdm(np.arange(len(unit_0.Trial_info.Trial_types)) + 1):
+            for tr_idx in tqdm(np.arange(len(unit_0.Trial_info.Trial_types))):
                 trial_key['trial_id'] = tr_idx
                 trial_key['start_time'] = None  # hard-coded here, no trial-start times found in data
                 trial_key['stop_time'] = None  # hard-coded here, no trial-end times found in data
-                trial_key['trial_stim_present'] = unit_0.Behavior.stim_trial_vector[tr_idx] != 0
-                trial_key['trial_is_good'] = unit_0.Trial_info.Trial_range_to_analyze[0] <= tr_idx <= unit_0.Trial_info.Trial_range_to_analyze[-1]
+                trial_key['trial_stim_present'] = bool(unit_0.Behavior.stim_trial_vector[tr_idx] != 0)
+                trial_key['trial_is_good'] = bool(unit_0.Trial_info.Trial_range_to_analyze[0]
+                                                  <= tr_idx <= unit_0.Trial_info.Trial_range_to_analyze[-1])
                 trial_key['trial_type'], trial_key['trial_response'] = trial_type_and_response_dict[
                     unit_0.Behavior.Trial_types_of_response_vector[tr_idx]]
-                trial_key['delay_duration'] = unit_0.Behavior.delay_dur[tr_idx]
+                trial_key['delay_duration'] = unit_0.Behavior.delay_dur[tr_idx] if 'delay_dur' in unit_0.Behavior._fieldnames else 1.2
                 acquisition.TrialSet.Trial.insert1(trial_key, ignore_extra_fields = True, skip_duplicates = True,
                                                    allow_direct_insert = True)
 
@@ -136,9 +137,9 @@ for fname in fnames:
                 # ======== Now add trial stimulation descriptors to the TrialPhotoStimInfo table ====
                 trial_key['photo_stim_period'] = 'early delay'  # TODO: hardcoded here because this info is not available from data
                 trial_key['photo_stim_power'] = (re.search('(?<=_)\d+(?=mW_)',
-                                                           unit_0.Trial_info.Trial_types[tr_idx]).group()
+                                                           str(unit_0.Trial_info.Trial_types[tr_idx])).group()  # str() to safeguard against np.array([]) (probably typo)
                                                  if re.search('(?<=_)\d+(?=mW_)',
-                                                              unit_0.Trial_info.Trial_types[tr_idx]) else None)
+                                                              str(unit_0.Trial_info.Trial_types[tr_idx])) else None)
                 stimulation.TrialPhotoStimInfo.insert1(trial_key, ignore_extra_fields=True, allow_direct_insert=True)
 
     # ==================== Extracellular ====================
@@ -168,16 +169,6 @@ for fname in fnames:
                            probe_name=probe_name, channel_counts=channel_counts)
     if probe_insertion not in extracellular.ProbeInsertion.proj():
         extracellular.ProbeInsertion.insert1(probe_insertion, ignore_extra_fields=True)
-
-    for unit_idx, unit in enumerate(mat_units):
-        unit_key = dict(probe_insertion,
-                        unit_id=unit_idx,
-                        channel_id=unit.channel,
-                        unit_spike_width=unit.SpikeWidth,
-                        unit_depth=unit.Depth,
-                        spike_times=unit.SpikeTimes,
-                        spike_waveform= unit.Spike_shpe_info.SpikeShape)
-        extracellular.UnitSpikeTimes.insert1(unit_key, allow_direct_insert=True)
 
     # ==================== photostim ====================
     # no info on photostim available from data, all photostim info here are hard-coded from the paper
@@ -227,5 +218,6 @@ for fname in fnames:
 
 # ====================== Starting import and compute procedure ======================
 print('======== Populate() Routine =====')
-
+extracellular.UnitSpikeTimes.populate()
+extracellular.TrialSegmentedUnitSpikeTimes.populate()
 
