@@ -29,9 +29,6 @@ class Probe(dj.Lookup):
         -> master
         channel_id:         smallint     # id of a channel on the probe
         ---
-        channel_x_pos=null:  float   # x position relative to the tip of the probe (um)
-        channel_y_pos=null:  float   # y position relative to the tip of the probe (um)
-        channel_z_pos=null:  float   # y position relative to the tip of the probe (um)
         shank_id: smallint  # the shank id of this probe this channel is located on 
         """
 
@@ -145,7 +142,7 @@ class Experimenter(dj.Lookup):
     definition = """
     experimenter: varchar(64)
     """
-    contents = [['Nuo Li']]
+    contents = zip(['Nuo Li', 'Hidehiko Inagaki'])
 
 
 @schema
@@ -188,10 +185,4 @@ class TrialResponse(dj.Lookup):
     """
     contents = zip(['correct', 'incorrect', 'no response', 'early lick', 'N/A'])
 
-@schema
-class TrialStimType(dj.Lookup):
-    definition = """ # The stimulation type of this trial, e.g. 'no stim', 'photo stimulation', 'photo inhibition'
-    trial_stim_type: varchar(32)
-    """
-    contents = zip(['no stim', 'photo stimulation', 'photo inhibition', 'N/A'])
     

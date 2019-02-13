@@ -10,10 +10,10 @@ import scipy.io as sio
 import pandas as pd
 from tqdm import tqdm
 import uuid
-
 import datajoint as dj
-from pipeline import reference, subject, acquisition, stimulation, analysis #, behavior, ephys, action
-from pipeline import utilities
+
+from pipeline import (reference, subject, acquisition, stimulation, analysis,
+                      intracellular, extracellular, behavior, utilities)
 
 # ================== Dataset ==================
 path = os.path.join('.', 'data', 'SiliconProbeData')
@@ -66,13 +66,15 @@ for fname in fnames:
                         species='Mus musculus',  # not available, hard-coded here
                         animal_source='N/A')  # animal source not available from data, nor 'sex'
 
-    for s in subject.StrainAlias.fetch():
-        if re.search(re.escape(s[0]), this_sess.genotype, re.I):
-            subject_info['strain'] = (subject.StrainAlias & {'strain_alias': s[0]}).fetch1('strain')
-            break
+    strain_dict = {alias.lower(): strain for alias, strain in subject.StrainAlias.fetch()}
+    regex_str = ''.join([re.escape(alias) + '|' for alias in strain_dict.keys()])[:-1]
+    strains = [strain_dict[s.lower()] for s in re.findall(regex_str, this_sess.genotype, re.I)]
 
     if subject_info not in subject.Subject.proj():
-        subject.Subject.insert1(subject_info, ignore_extra_fields = True)
+        with subject.Subject.connection.transaction:
+            subject.Subject.insert1(subject_info, ignore_extra_fields=True)
+            subject.Subject.Strain.insert((dict(subject_info, strain = k)
+                                           for k in strains), ignore_extra_fields = True)
 
     # ==================== session ====================
     # -- session_time
@@ -84,6 +86,7 @@ for fname in fnames:
     experimenters = ['Hidehiko Inagaki']  # hard-coded here
     experiment_types = this_sess.sess_type
     experiment_types = [experiment_types] if isinstance(experiment_types, str) else experiment_types
+    experiment_types.append('extracellular')
 
     # experimenter and experiment type (possible multiple experimenters or types)
     # no experimenter info
@@ -92,12 +95,9 @@ for fname in fnames:
     if session_info not in acquisition.Session.proj():
         with acquisition.Session.connection.transaction:
             acquisition.Session.insert1(session_info, ignore_extra_fields=True)
-            acquisition.Session.Experimenter.insert((dict(session_info, experiment_type=k) for k in experimenters), ignore_extra_fields=True)
+            acquisition.Session.Experimenter.insert((dict(session_info, experimenter=k) for k in experimenters), ignore_extra_fields=True)
             acquisition.Session.ExperimentType.insert((dict(session_info, experiment_type=k) for k in experiment_types), ignore_extra_fields=True)
         print(f'\nCreating Session - Subject: {subject_info["subject_id"]} - Date: {session_info["session_time"]}')
-
-    # ==================== Extracellular ====================
-
 
     # ==================== Trials ====================
     # Trial Info for all units are the same -> pick unit[0] to extract trial info
@@ -105,37 +105,125 @@ for fname in fnames:
     fs = unit_0.Meta_data.parameters.Sample_Rate
     trial_key = dict(session_info, trial_counts=len(unit_0.Trial_info.Trial_types))
     if trial_key not in acquisition.TrialSet.proj():
-        print('\nInsert trial information')
-        acquisition.TrialSet.insert1(trial_key, allow_direct_insert=True, ignore_extra_fields = True)
+        with acquisition.TrialSet.connection.transaction:
+            print('\nInsert trial information')
+            acquisition.TrialSet.insert1(trial_key, allow_direct_insert=True, ignore_extra_fields = True)
 
-        for tr_idx in tqdm(np.arange(len(unit_0.Trial_info.Trial_types)) + 1):
-            trial_key['trial_id'] = tr_idx
-            trial_key['start_time'] = (unit_0.Trial_info.Trial_onset_vector_original[tr_idx] / fs
-                                       if 'Trial_onset_vector_original' in unit_0.Trial_info._fieldnames else None)
-            trial_key['stop_time'] = None  # hard-coded here, no trial-end times found in data
-            trial_key['trial_stim_present'] = unit_0.Behavior.stim_trial_vector[tr_idx] != 0
-            trial_key['trial_is_good'] = unit_0.Trial_info.Trial_range_to_analyze[0] <= tr_idx <= unit_0.Trial_info.Trial_range_to_analyze[-1]
-            trial_key['trial_type'], trial_key['trial_response'] = trial_type_and_response_dict[
-                unit_0.Behavior.Trial_types_of_response_vector[tr_idx]]
-            trial_key['delay_duration'] = unit_0.Behavior.delay_dur[tr_idx]
-            acquisition.TrialSet.Trial.insert1(trial_key, ignore_extra_fields = True, skip_duplicates = True,
-                                               allow_direct_insert = True)
+            for tr_idx in tqdm(np.arange(len(unit_0.Trial_info.Trial_types)) + 1):
+                trial_key['trial_id'] = tr_idx
+                trial_key['start_time'] = None  # hard-coded here, no trial-start times found in data
+                trial_key['stop_time'] = None  # hard-coded here, no trial-end times found in data
+                trial_key['trial_stim_present'] = unit_0.Behavior.stim_trial_vector[tr_idx] != 0
+                trial_key['trial_is_good'] = unit_0.Trial_info.Trial_range_to_analyze[0] <= tr_idx <= unit_0.Trial_info.Trial_range_to_analyze[-1]
+                trial_key['trial_type'], trial_key['trial_response'] = trial_type_and_response_dict[
+                    unit_0.Behavior.Trial_types_of_response_vector[tr_idx]]
+                trial_key['delay_duration'] = unit_0.Behavior.delay_dur[tr_idx]
+                acquisition.TrialSet.Trial.insert1(trial_key, ignore_extra_fields = True, skip_duplicates = True,
+                                                   allow_direct_insert = True)
 
-            # ======== Now add trial event timing to the EventTime part table ====
-            events_time = dict(trial_start=trial_key['start_time'],
-                               trial_stop=trial_key['stop_time'],
-                               first_lick=unit_0.Behavior.First_lick[tr_idx],
-                               cue_start=unit_0.Behavior.Cue_start[tr_idx],
-                               sampling_start=unit_0.Behavior.Delay_start[tr_idx],
-                               delay_start=unit_0.Behavior.Sample_start[tr_idx])
-            # -- events timing
-            acquisition.TrialSet.EventTime.insert((dict(trial_key, trial_event=k, event_time=e)
-                                                   for k, e in events_time.items()),
-                                                  ignore_extra_fields = True, skip_duplicates = True,
-                                                  allow_direct_insert = True)
+                # ======== Now add trial event timing to the EventTime part table ====
+                events_time = dict(trial_start=trial_key['start_time'],
+                                   trial_stop=trial_key['stop_time'],
+                                   first_lick=unit_0.Behavior.First_lick[tr_idx],
+                                   cue_start=unit_0.Behavior.Cue_start[tr_idx],
+                                   sampling_start=unit_0.Behavior.Delay_start[tr_idx],
+                                   delay_start=unit_0.Behavior.Sample_start[tr_idx])
+                # -- events timing
+                acquisition.TrialSet.EventTime.insert((dict(trial_key, trial_event=k, event_time=e)
+                                                       for k, e in events_time.items()),
+                                                      ignore_extra_fields = True, skip_duplicates = True,
+                                                      allow_direct_insert = True)
+                # ======== Now add trial stimulation descriptors to the TrialPhotoStimInfo table ====
+                trial_key['photo_stim_period'] = 'early delay'  # TODO: hardcoded here because this info is not available from data
+                trial_key['photo_stim_power'] = (re.search('(?<=_)\d+(?=mW_)',
+                                                           unit_0.Trial_info.Trial_types[tr_idx]).group()
+                                                 if re.search('(?<=_)\d+(?=mW_)',
+                                                              unit_0.Trial_info.Trial_types[tr_idx]) else None)
+                stimulation.TrialPhotoStimInfo.insert1(trial_key, ignore_extra_fields=True, allow_direct_insert=True)
 
-    # ==================== behavioral and photostim ====================
+    # ==================== Extracellular ====================
+    # no info about Probe or recording location from data, all hardcoded from paper
+    channel_counts = 64
+    chn_per_shank = 32
+    probe_name = 'A2x32-8mm-25-250-165'
+    # -- Probe
+    if {'probe_name': probe_name, 'channel_counts': channel_counts} not in reference.Probe.proj():
+        with reference.Probe.connection.transaction:
+            reference.Probe.insert1(
+                    {'probe_name': probe_name,
+                     'channel_counts': channel_counts})
+            reference.Probe.Channel.insert({'probe_name': probe_name, 'channel_counts': channel_counts,
+                                            'channel_id': ch_idx, 'shank_id': int(ch_idx <= chn_per_shank) + 1}
+                                           for ch_idx in np.arange(channel_counts) + 1)
 
+    brain_region = 'ALM'
+    hemisphere = 'left'
+    brain_location = {'brain_region': brain_region,
+                      'brain_subregion': 'N/A',
+                      'cortical_layer': 'N/A',
+                      'hemisphere': hemisphere}
+
+    # -- ProbeInsertion
+    probe_insertion = dict({**session_info, **brain_location},
+                           probe_name=probe_name, channel_counts=channel_counts)
+    if probe_insertion not in extracellular.ProbeInsertion.proj():
+        extracellular.ProbeInsertion.insert1(probe_insertion, ignore_extra_fields=True)
+
+    for unit_idx, unit in enumerate(mat_units):
+        unit_key = dict(probe_insertion,
+                        unit_id=unit_idx,
+                        channel_id=unit.channel,
+                        unit_spike_width=unit.SpikeWidth,
+                        unit_depth=unit.Depth,
+                        spike_times=unit.SpikeTimes,
+                        spike_waveform= unit.Spike_shpe_info.SpikeShape)
+        extracellular.UnitSpikeTimes.insert1(unit_key, allow_direct_insert=True)
+
+    # ==================== photostim ====================
+    # no info on photostim available from data, all photostim info here are hard-coded from the paper
+    brain_region = 'ALM'
+    hemisphere = 'bilateral'
+    coord_ap_ml_dv = [2.5, 1.5, 0]
+    stim_device = 'laser'  # hard-coded here..., could not find a more specific name from metadata
+    device_desc = 'laser (Laser Quantum) were controlled by an acousto-optical modulator (AOM; Quanta Tech) and a shutter (Vincent Associates)'
+
+    stim_info = dict(photo_stim_excitation_lambda=473,
+                     photo_stim_notes='photostimulate four spots in each hemisphere, centered on ALM (AP 2.5 mm; ML 1.5 mm) with 1 mm spacing (in total eight spots bilaterally) using scanning Galvo mirrors',
+                     photo_stim_duration=1000,
+                     photo_stim_freq=40,
+                     photo_stim_shape='sinusoidal',
+                     photo_stim_method='laser')
+
+    # -- BrainLocation
+    brain_location = {'brain_region': brain_region,
+                      'brain_subregion': 'N/A',
+                      'cortical_layer': 'N/A',
+                      'hemisphere': hemisphere}
+    if brain_location not in reference.BrainLocation.proj():
+        reference.BrainLocation.insert1(brain_location)
+    # -- ActionLocation
+    action_location = dict(brain_location,
+                           coordinate_ref = 'bregma',
+                           coordinate_ap = round(Decimal(coord_ap_ml_dv[0]), 2),
+                           coordinate_ml = round(Decimal(coord_ap_ml_dv[1]), 2),
+                           coordinate_dv = round(Decimal(coord_ap_ml_dv[2]), 2))
+    if action_location not in reference.ActionLocation.proj():
+        reference.ActionLocation.insert1(action_location)
+
+    # -- Device
+    if {'device_name': stim_device} not in stimulation.PhotoStimDevice.proj():
+        stimulation.PhotoStimDevice.insert1({'device_name': stim_device, 'device_desc': device_desc})
+
+    # -- PhotoStimulationInfo
+    photim_stim_info = {**action_location, **stim_info, 'device_name': stim_device}
+    if photim_stim_info not in stimulation.PhotoStimulationInfo.proj():
+        stimulation.PhotoStimulationInfo.insert1(photim_stim_info)
+    # -- PhotoStimulation
+    # only 1 photostim per session, perform at the same time with session
+    if dict(session_info, photostim_datetime=session_info['session_time']) not in stimulation.PhotoStimulation.proj():
+        stimulation.PhotoStimulation.insert1(dict({**session_info, **photim_stim_info},
+                                                  photostim_datetime=session_info['session_time'])
+                                             , ignore_extra_fields=True)
 
 # ====================== Starting import and compute procedure ======================
 print('======== Populate() Routine =====')
