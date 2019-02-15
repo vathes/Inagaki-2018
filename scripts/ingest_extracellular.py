@@ -9,7 +9,6 @@ from decimal import Decimal
 import scipy.io as sio
 import pandas as pd
 from tqdm import tqdm
-import uuid
 import datajoint as dj
 
 from pipeline import (reference, subject, acquisition, stimulation, analysis,
@@ -123,8 +122,8 @@ for fname in fnames:
                                                    allow_direct_insert = True)
 
                 # ======== Now add trial event timing to the EventTime part table ====
-                events_time = dict(trial_start=trial_key['start_time'],
-                                   trial_stop=trial_key['stop_time'],
+                events_time = dict(trial_start=0,
+                                   trial_stop=trial_key['stop_time'] - trial_key['start_time'],
                                    first_lick=unit_0.Behavior.First_lick[tr_idx],
                                    cue_start=unit_0.Behavior.Cue_start[tr_idx],
                                    sampling_start=unit_0.Behavior.Delay_start[tr_idx],

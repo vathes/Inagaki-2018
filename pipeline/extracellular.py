@@ -82,7 +82,7 @@ class TrialSegmentedUnitSpikeTimes(dj.Imported):
     -> acquisition.TrialSet.Trial
     -> analysis.TrialSegmentationSetting
     ---
-    segmented_spike_times: longblob
+    segmented_spike_times: longblob  # (s) with respect to the start of the trial
     """
 
     def make(self, key):

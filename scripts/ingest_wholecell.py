@@ -136,15 +136,16 @@ for fname in fnames:
                                                allow_direct_insert = True)
 
             # ======== Now add trial event timing to the EventTime part table ====
-            # -- events timing
-            acquisition.TrialSet.EventTime.insert((dict(trial_key, trial_event=k, event_time=dict(
+            events = dict(
                 events_time.__dict__,
-                trial_start=trial_key['start_time'],
-                trial_stop=trial_key['stop_time'],
+                trial_start=0,
+                trial_stop=trial_key['stop_time'] - trial_key['start_time'],
                 first_lick = min([np.array(events_time.__getattribute__(l)).flatten()[0]  # events_time(l) could be empty ([]), a single time (float) or multiple times (array)
                                   if np.array(events_time.__getattribute__(l)).flatten().size > 0 else np.nan
                                   for l in ('lickL_on_time', 'lickR_on_time')]),
-                current_injection_start=mat_data.behavioral_data.tail_current_injection_onset_bin[tr_idx] / fs)[k])
+                current_injection_start=mat_data.behavioral_data.tail_current_injection_onset_bin[tr_idx] / fs)
+            # -- events timing
+            acquisition.TrialSet.EventTime.insert((dict(trial_key, trial_event=k, event_time=events[k])
                                                    for k in ['trial_start', 'trial_stop', 'cue_start',
                                                              'cue_end', 'sampling_start', 'delay_start',
                                                              'current_injection_start']),
@@ -213,6 +214,8 @@ print('======== Populate() Routine =====')
 # -- Intracellular
 intracellular.MembranePotential.populate()
 intracellular.CurrentInjection.populate()
-intracellular.Spike.populate()
+intracellular.CellSpikeTimes.populate()
 
-
+intracellular.TrialSegmentedMembranePotential.populate()
+intracellular.TrialSegmentedCurrentInjection.populate()
+intracellular.TrialSegmentedCellSpikeTimes.populate()

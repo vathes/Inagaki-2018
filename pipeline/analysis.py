@@ -25,44 +25,42 @@ class TrialSegmentationSetting(dj.Lookup):
     pre_stim_duration: decimal(4,2)  # (s) pre-stimulus duration
     post_stim_duration: decimal(4,2)  # (s) post-stimulus duration
     """
-    contents = [[0, 'delay_start', 2, 3],
-                [1, 'cue_start', 3, 1]]
-    
+    contents = [[0, 'cue_start', 3, 1]]
 
-def perform_trial_segmentation(trial_key, event_name, pre_stim_dur, post_stim_dur, data, fs, first_time_point):
+
+@schema
+class RealignedEvent(dj.Computed):
+    definition = """
+    -> TrialSegmentationSetting
+    -> acquisition.TrialSet.Trial
+    """
+
+    class RealignedEventTime(dj.Part):
+        definition = """ # experimental paradigm event timing marker(s) for this trial
+        -> master
+        -> acquisition.TrialSet.EventTime
+        ---
+        realigned_event_time = null: float   # (s) event time with respect to the event this trial-segmentation is time-locked to
+        """
+
+    def make(self, key):
+        self.insert1(key)
+        # get event, pre/post stim duration
+        event_of_interest, pre_stim_dur, post_stim_dur = (TrialSegmentationSetting & key).fetch1(
+            'event', 'pre_stim_duration', 'post_stim_duration')
         # get event time
-        try: 
-            event_time_point = get_event_time(event_name, trial_key)
+        try:
+            eoi_time_point = get_event_time(event_of_interest, key)
         except EventChoiceError as e:
-            raise e
-        #
-        pre_stim_dur = float(pre_stim_dur)
-        post_stim_dur = float(post_stim_dur)
-        # check if pre/post stim dur is within start/stop time, if not, pad with NaNs
-        trial_start, trial_stop = (acquisition.TrialSet.Trial & trial_key).fetch1('start_time', 'stop_time')
+            print(f'Event Choice error - Msg: {str(e)}')
+            return
+        # get all other events for this trial
+        events, event_times = (acquisition.TrialSet.EventTime & key).fetch('trial_event', 'event_time')
+        self.RealignedEventTime.insert(dict(key,
+                                            trial_event = eve,
+                                            realigned_event_time = event_times[e_idx] - eoi_time_point)
+                                       for e_idx, eve in enumerate(events))
 
-        pre_stim_nan_count = 0
-        post_stim_nan_count = 0
-        if trial_start and event_time_point - pre_stim_dur < trial_start:
-            pre_stim_nan_count = int((trial_start - (event_time_point - pre_stim_dur)) * fs)
-            pre_stim_dur = 0
-            print(f'Warning: Out of bound prestimulus duration, pad {pre_stim_nan_count} NaNs')
-        if trial_stop and event_time_point + post_stim_dur > trial_stop:
-            post_stim_nan_count = int((event_time_point + post_stim_dur - trial_stop) * fs)
-            post_stim_dur = trial_stop - event_time_point
-            print(f'Warning: Out of bound poststimulus duration, pad {post_stim_nan_count} NaNs')
-
-        event_sample_point = (event_time_point - first_time_point) * fs
-        
-        sample_points_to_extract = range((event_sample_point - pre_stim_dur * fs).astype(int),
-                                             (event_sample_point + post_stim_dur * fs + 1).astype(int))
-        segmented_data = data[sample_points_to_extract]    
-        # pad with NaNs
-        segmented_data = np.hstack((np.full(pre_stim_nan_count, np.nan), segmented_data,
-                                    np.full(post_stim_nan_count, np.nan)))
-        
-        return segmented_data
-       
 
 def get_event_time(event_name, key):
     # get event time
