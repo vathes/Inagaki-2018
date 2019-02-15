@@ -55,7 +55,7 @@ def find_session_matched_matfile(sess_data_dir, key):
             print(f'Session not found! - Subject: {key["subject_id"]} - Date: {key["session_time"]}')
             return None
         else: 
-            print(f'Found datafile: {sess_data_file}')
+            #print(f'Found datafile: {sess_data_file}')
             return sess_data_file
  
        

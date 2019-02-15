@@ -25,7 +25,8 @@ class TrialSegmentationSetting(dj.Lookup):
     pre_stim_duration: decimal(4,2)  # (s) pre-stimulus duration
     post_stim_duration: decimal(4,2)  # (s) post-stimulus duration
     """
-    contents = [[0, 'delay_start', 1.5, 3]]
+    contents = [[0, 'delay_start', 2, 3],
+                [1, 'cue_start', 3, 1]]
     
 
 def perform_trial_segmentation(trial_key, event_name, pre_stim_dur, post_stim_dur, data, fs, first_time_point):

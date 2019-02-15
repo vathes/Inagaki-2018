@@ -124,4 +124,4 @@ class TrialSegmentedUnitSpikeTimes(dj.Imported):
             (spike_times <= (event_time_point + post_stim_dur)))] - event_time_point
 
         self.insert1(key)
-        print(f'Perform trial-segmentation of spike times for unit: {key["unit_id"]} and trial: {key["trial_id"]}')
+        print(f'Ingest trial-seg spike times for unit: {key["unit_id"]} - trial: {key["trial_id"]}')
