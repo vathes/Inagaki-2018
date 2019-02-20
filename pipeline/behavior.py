@@ -4,72 +4,75 @@ Schema of behavioral information.
 import re
 import os
 from datetime import datetime
+import sys
 
 import numpy as np
 import scipy.io as sio
 import datajoint as dj
 import h5py as h5
 
-from . import reference, subject, utilities, stimulation, acquisition, analysis
+from . import utilities, acquisition, analysis, intracellular
 
 
 schema = dj.schema(dj.config.get('database.prefix', '') + 'behavior')
 
-@schema
-class LickTrace(dj.Imported):
-    definition = """
-    -> acquisition.Session
-    ---
-    lick_trace_left: longblob   
-    lick_trace_right: longblob
-    lick_trace_start_time: float # (s) first timepoint of lick trace recording
-    lick_trace_sampling_rate: float # (Hz) sampling rate of lick trace recording
-    """
-
-    def make(self, key):
-        # ============ Dataset ============
-        sess_data_dir = os.path.join('..', 'data', 'whole_cell_nwb2.0')
-        # Get the Session definition from the keys of this session
-        animal_id = key['subject_id']
-        date_of_experiment = key['session_time']
-        # Search the files in filenames to find a match for "this" session (based on key)
-        sess_data_file = utilities.find_session_matched_nwbfile(sess_data_dir, animal_id, date_of_experiment)
-        if sess_data_file is None:
-            print(f'BehaviorAcquisition import failed for: {animal_id} - {date_of_experiment}')
-            return
-        nwb = h5.File(os.path.join(sess_data_dir, sess_data_file), 'r')
-        #  ============= Now read the data and start ingesting =============
-        print('Insert behavioral data for: subject: {0} - date: {1}'.format(key['subject_id'], key['session_time']))
-        key['lick_trace_left'] = nwb['acquisition']['timeseries']['lick_trace_L']['data'].value
-        key['lick_trace_right'] = nwb['acquisition']['timeseries']['lick_trace_R']['data'].value
-        lick_trace_time_stamps = nwb['acquisition']['timeseries']['lick_trace_R']['timestamps'].value
-        key['lick_trace_start_time'] = lick_trace_time_stamps[0]
-        key['lick_trace_sampling_rate'] = 1 / np.mean(np.diff(lick_trace_time_stamps))
-        self.insert1(key)
-
 
 @schema
-class TrialSegmentedLickTrace(dj.Computed):
+class TrialSegmentedLickTrace(dj.Imported):
     definition = """
-    -> LickTrace
     -> acquisition.TrialSet.Trial
     -> analysis.TrialSegmentationSetting
     ---
-    segmented_lt_left: longblob   
-    segmented_lt_right: longblob
+    segmented_lick_left_on: longblob  # (s), lick left onset times (based on contact of lick port)
+    segmented_lick_left_off: longblob  # (s), lick left offset times (based on contact of lick port)
+    segmented_lick_right_on: longblob  # (s), lick right onset times (based on contact of lick port)
+    segmented_lick_right_off: longblob  # (s), lick right offset times (based on contact of lick port)
     """
 
+    key_source = ((acquisition.TrialSet.Trial & (acquisition.Session.ExperimentType
+                                                 & {'experiment_type': 'intracellular'}))
+                  * analysis.TrialSegmentationSetting)
+
     def make(self, key):
+        # ============ Dataset ============
+        sess_data_dir = os.path.join('.', 'data', 'WholeCellData', 'Data')
+        # Get the Session definition from the keys of this session
+        sess_data_file = utilities.find_session_matched_matfile(
+            sess_data_dir, dict(key, cell_id=(intracellular.Cell & key).fetch1('cell_id')))
+        if sess_data_file is None:
+            print(f'Intracellular import failed: ({key["subject_id"]} - {key["session_time"]})', file=sys.stderr)
+            return
+        mat_data = sio.loadmat(sess_data_file, struct_as_record = False, squeeze_me = True)['wholeCell']
+        #  ============= Now read the data and start ingesting =============
+        lick_times = {k_n: mat_data.behavioral_data.behav_timing[key['trial_id']].__getattribute__(n)
+                      for k_n, n in zip(['segmented_lick_left_on', 'segmented_lick_left_off',
+                                         'segmented_lick_right_on', 'segmented_lick_right_off'],
+                                        ['lickL_on_time', 'lickL_off_time',
+                                         'lickR_on_time', 'lickR_off_time'])}
         # get event, pre/post stim duration
         event_name, pre_stim_dur, post_stim_dur = (analysis.TrialSegmentationSetting & key).fetch1(
             'event', 'pre_stim_duration', 'post_stim_duration')
-        # get raw
-        fs, first_time_point, lt_left, lt_right = (LickTrace & key).fetch1(
-            'lick_trace_sampling_rate', 'lick_trace_start_time', 'lick_trace_left', 'lick_trace_right')
-        # segmentation
-        key['segmented_lt_left'] = analysis.perform_trial_segmentation(key, event_name, pre_stim_dur, post_stim_dur,
-                                                              lt_left, fs, first_time_point)
-        key['segmented_lt_right'] = analysis.perform_trial_segmentation(key, event_name, pre_stim_dur, post_stim_dur,
-                                                               lt_right, fs, first_time_point)
-        self.LickTrace.insert1(key)
+        # get event time
+        try:
+            event_time_point = analysis.get_event_time(event_name, key)
+        except analysis.EventChoiceError as e:
+            print(f'Trial segmentation error - Msg: {str(e)}')
+            return
+        pre_stim_dur = float(pre_stim_dur)
+        post_stim_dur = float(post_stim_dur)
+        # check if pre/post stim dur is within start/stop time
+        trial_start, trial_stop = (acquisition.TrialSet.Trial & key).fetch1('start_time', 'stop_time')
+        if trial_start and event_time_point - pre_stim_dur < 0:
+            print('Warning: Out of bound prestimulus duration, set to 0')
+            pre_stim_dur = 0
+        if trial_stop and event_time_point + post_stim_dur > trial_stop:
+            print('Warning: Out of bound poststimulus duration, set to trial end time')
+            post_stim_dur = trial_stop - event_time_point
+
+        for k, v in lick_times.items():
+            v = np.array([v]) if isinstance(v, (float, int)) else v
+            key[k] = v[np.logical_and((v >= (event_time_point - pre_stim_dur)),
+                                      (v <= (event_time_point + post_stim_dur)))] - event_time_point
+
+        self.insert1(key)
         print(f'Perform trial-segmentation of lick traces for trial: {key["trial_id"]}')

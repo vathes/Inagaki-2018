@@ -148,7 +148,7 @@ for fname in fnames:
             acquisition.TrialSet.EventTime.insert((dict(trial_key, trial_event=k, event_time=events[k])
                                                    for k in ['trial_start', 'trial_stop', 'cue_start',
                                                              'cue_end', 'sampling_start', 'delay_start',
-                                                             'current_injection_start']),
+                                                             'current_injection_start', 'first_lick']),
                                                   ignore_extra_fields = True, skip_duplicates = True,
                                                   allow_direct_insert = True)
 
@@ -204,11 +204,6 @@ for fname in fnames:
                                                   photostim_datetime=session_info['session_time'])
                                              , ignore_extra_fields=True)
 
-    # ==================== behavioral ====================
-
-
-
-
 # ====================== Starting import and compute procedure ======================
 print('======== Populate() Routine =====')
 # -- Intracellular
@@ -219,3 +214,5 @@ intracellular.CellSpikeTimes.populate()
 intracellular.TrialSegmentedMembranePotential.populate()
 intracellular.TrialSegmentedCurrentInjection.populate()
 intracellular.TrialSegmentedCellSpikeTimes.populate()
+
+behavior.TrialSegmentedLickTrace.populate()

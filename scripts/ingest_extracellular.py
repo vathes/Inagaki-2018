@@ -123,7 +123,7 @@ for fname in fnames:
 
                 # ======== Now add trial event timing to the EventTime part table ====
                 events_time = dict(trial_start=0,
-                                   trial_stop=trial_key['stop_time'] - trial_key['start_time'],
+                                   trial_stop=None,
                                    first_lick=unit_0.Behavior.First_lick[tr_idx],
                                    cue_start=unit_0.Behavior.Cue_start[tr_idx],
                                    sampling_start=unit_0.Behavior.Delay_start[tr_idx],
