@@ -207,12 +207,12 @@ for fname in fnames:
 # ====================== Starting import and compute procedure ======================
 print('======== Populate() Routine =====')
 # -- Intracellular
-intracellular.MembranePotential.populate()
-intracellular.CurrentInjection.populate()
-intracellular.CellSpikeTimes.populate()
+intracellular.MembranePotential.populate(reserve_jobs=True)
+intracellular.CurrentInjection.populate(reserve_jobs=True)
+intracellular.CellSpikeTimes.populate(reserve_jobs=True)
 
-intracellular.TrialSegmentedMembranePotential.populate()
-intracellular.TrialSegmentedCurrentInjection.populate()
-intracellular.TrialSegmentedCellSpikeTimes.populate()
+intracellular.TrialSegmentedMembranePotential.populate(reserve_jobs=True)
+intracellular.TrialSegmentedCurrentInjection.populate(reserve_jobs=True)
+intracellular.TrialSegmentedCellSpikeTimes.populate(reserve_jobs=True)
 
-behavior.TrialSegmentedLickTrace.populate()
+behavior.TrialSegmentedLickTrace.populate(reserve_jobs=True)

@@ -86,6 +86,7 @@ for fname in fnames:
     experiment_types = this_sess.sess_type
     experiment_types = [experiment_types] if isinstance(experiment_types, str) else experiment_types
     experiment_types.append('extracellular')
+    experiment_types.append('Auditory task')  # hard-coded here, all probe data from this set are Auditory
 
     # experimenter and experiment type (possible multiple experimenters or types)
     # no experimenter info
@@ -126,8 +127,8 @@ for fname in fnames:
                                    trial_stop=None,
                                    first_lick=unit_0.Behavior.First_lick[tr_idx],
                                    cue_start=unit_0.Behavior.Cue_start[tr_idx],
-                                   sampling_start=unit_0.Behavior.Delay_start[tr_idx],
-                                   delay_start=unit_0.Behavior.Sample_start[tr_idx])
+                                   delay_start=unit_0.Behavior.Delay_start[tr_idx],
+                                   sampling_start=unit_0.Behavior.Sample_start[tr_idx])
                 # -- events timing
                 acquisition.TrialSet.EventTime.insert((dict(trial_key, trial_event=k, event_time=e)
                                                        for k, e in events_time.items()),
@@ -217,6 +218,7 @@ for fname in fnames:
 
 # ====================== Starting import and compute procedure ======================
 print('======== Populate() Routine =====')
-extracellular.UnitSpikeTimes.populate()
-extracellular.TrialSegmentedUnitSpikeTimes.populate()
+analysis.RealignedEvent.populate(reserve_jobs=True)
+extracellular.UnitSpikeTimes.populate(reserve_jobs=True)
+extracellular.TrialSegmentedUnitSpikeTimes.populate(reserve_jobs=True)
 

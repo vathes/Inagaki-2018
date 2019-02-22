@@ -21,7 +21,7 @@ class ExperimentType(dj.Lookup):
     definition = """
     experiment_type: varchar(64)
     """
-    contents = zip(['behavior', 'extracellular', 'photostim',
+    contents = zip(['behavior', 'extracellular', 'photostim', 'Auditory task', 'Tactile task'
                     'intracellular', 'EPSP', 'regular'])  # regular: no current injection, EPSP: negative current injection
 
 

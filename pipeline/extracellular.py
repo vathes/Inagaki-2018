@@ -110,8 +110,8 @@ class TrialSegmentedUnitSpikeTimes(dj.Imported):
         # check if pre/post stim dur is within start/stop time
         trial_start, trial_stop = (acquisition.TrialSet.Trial & key).fetch1('start_time', 'stop_time')
         if trial_start and event_time_point - pre_stim_dur < 0:
-            print('Warning: Out of bound prestimulus duration, set to 0')
-            pre_stim_dur = 0
+            print('Warning: Out of bound prestimulus duration, select spikes from start-time (t=0)')
+            pre_stim_dur = event_time_point
         if trial_stop and event_time_point + post_stim_dur > trial_stop:
             print('Warning: Out of bound poststimulus duration, set to trial end time')
             post_stim_dur = trial_stop - event_time_point
