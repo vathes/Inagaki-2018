@@ -9,6 +9,7 @@ from decimal import Decimal
 import scipy.io as sio
 import pandas as pd
 from tqdm import tqdm
+import glob
 import datajoint as dj
 
 from pipeline import (reference, subject, acquisition, stimulation, analysis,
@@ -62,35 +63,35 @@ trial_type_and_response_dict = {1: ('lick right', 'correct'),
 
 # ========================== METADATA ==========================
 # ==================== subject ====================
-fnames = np.hstack([os.path.join(dir_files[0], f) for f in dir_files[2] if f.find('.mat') != -1]
-          for dir_files in os.walk(path) if len(dir_files[1]) == 0)
+fnames = np.hstack(glob.glob(os.path.join(dir_files[0], '*.mat'))
+                   for dir_files in os.walk(path) if len(dir_files[1]) == 0)
 
 for fname in fnames:
     mat = sio.loadmat(fname, struct_as_record = False, squeeze_me = True)
     mat_units = mat['unit']
-    mat_trial_info = mat['trial_info'] if 'trial_info' in mat.keys() else None
+    mat_trial_info = mat.get('trial_info')
     this_sess = meta_data.loc[re.sub('_units.mat|_JRC_units', '', os.path.split(fname)[-1])]
     print(f'\nReading: {this_sess.name}')
 
     subject_info = dict(subject_id=this_sess.subject_id.lower(),
-                        date_of_birth=utilities.try_parsing_date(str(this_sess.date_of_birth)),
+                        date_of_birth=utilities.parse_date(str(this_sess.date_of_birth)),
                         sex=this_sess.sex[0].upper(),
                         species='Mus musculus',  # not available, hard-coded here
                         animal_source='N/A')  # animal source not available from data
 
     allele_dict = {alias.lower(): allele for alias, allele in subject.AlleleAlias.fetch()}
-    regex_str = ''.join([re.escape(alias) + '|' for alias in allele_dict.keys()])[:-1]
+    regex_str = '|'.join([re.escape(alias) for alias in allele_dict.keys()])
     alleles = [allele_dict[s.lower()] for s in re.findall(regex_str, this_sess.genotype, re.I)]
 
-    if subject_info not in subject.Subject.proj():
-        with subject.Subject.connection.transaction:
+    with subject.Subject.connection.transaction:
+        if subject_info not in subject.Subject.proj():
             subject.Subject.insert1(subject_info, ignore_extra_fields=True)
             subject.Subject.Allele.insert((dict(subject_info, allele = k)
                                            for k in alleles), ignore_extra_fields = True)
 
     # ==================== session ====================
     # -- session_time
-    session_time = utilities.try_parsing_date(str(this_sess.session_time))
+    session_time = utilities.parse_date(str(this_sess.session_time))
     session_info = dict(subject_info,
                         session_id='_'.join(this_sess.name.split('_')[:2]),
                         session_time=session_time)
@@ -104,46 +105,57 @@ for fname in fnames:
     # no experimenter info
     acquisition.ExperimentType.insert(zip(experiment_types), skip_duplicates=True)
 
-    if session_info not in acquisition.Session.proj():
-        with acquisition.Session.connection.transaction:
+    with acquisition.Session.connection.transaction:
+        if session_info not in acquisition.Session.proj():
             acquisition.Session.insert1(session_info, ignore_extra_fields=True)
-            acquisition.Session.Experimenter.insert((dict(session_info, experimenter=k) for k in experimenters), ignore_extra_fields=True)
-            acquisition.Session.ExperimentType.insert((dict(session_info, experiment_type=k) for k in experiment_types), ignore_extra_fields=True)
+            acquisition.Session.Experimenter.insert((dict(session_info, experimenter=k)
+                                                     for k in experimenters),
+                                                    ignore_extra_fields=True)
+            acquisition.Session.ExperimentType.insert((dict(session_info, experiment_type=k)
+                                                       for k in experiment_types),
+                                                      ignore_extra_fields=True)
         print(f'\nCreating Session - Subject: {subject_info["subject_id"]} - Date: {session_info["session_time"]}')
 
     # ==================== Trials ====================
     # Trial Info for all units are the same -> pick unit[0] to extract trial info
     unit_0 = mat_units[0]
     trial_key = dict(session_info, trial_counts=len(unit_0.Trial_info.Trial_types))
-    if trial_key not in acquisition.TrialSet.proj():
-        fs = unit_0.Meta_data.parameters.Sample_Rate
-        if mat_trial_info is not None:  # handle different fieldnames "Sampling_start" vs "Sample_start" in tactile_task dataset
-            unit_0.Behavior.Sample_start = unit_0.Behavior.Sampling_start
 
-        with acquisition.TrialSet.connection.transaction:
+    with acquisition.TrialSet.connection.transaction:
+        if trial_key not in acquisition.TrialSet.proj():
+            fs = unit_0.Meta_data.parameters.Sample_Rate
+            if mat_trial_info is not None:  # handle different fieldnames "Sampling_start" vs "Sample_start" in tactile_task dataset
+                unit_0.Behavior.Sample_start = unit_0.Behavior.Sampling_start
+
             print('\nInsert trial information')
             acquisition.TrialSet.insert1(trial_key, allow_direct_insert=True, ignore_extra_fields = True)
 
-            for tr_idx in tqdm(np.arange(len(unit_0.Trial_info.Trial_types))):
+            for tr_idx, (stim_trial, trial_type_of_response, trial_type,
+                         first_lick, cue_start, delay_start, sample_start) in tqdm(
+                enumerate(zip(unit_0.Behavior.stim_trial_vector, unit_0.Behavior.Trial_types_of_response_vector,
+                              unit_0.Trial_info.Trial_types, unit_0.Behavior.First_lick, unit_0.Behavior.Cue_start,
+                              unit_0.Behavior.Delay_start, unit_0.Behavior.Sample_start))):
+
                 trial_key['trial_id'] = tr_idx + 1  # trial-number starts from 1
                 trial_key['start_time'] = mat_trial_info[tr_idx].onset / fs if mat_trial_info is not None else None  # hard-coded here, no trial-start times found in data for 1st paper
                 trial_key['stop_time'] = mat_trial_info[tr_idx].offset / fs if mat_trial_info is not None else None  # hard-coded here, no trial-end times found in data
-                trial_key['trial_stim_present'] = bool(unit_0.Behavior.stim_trial_vector[tr_idx] != 0)
-                trial_key['trial_is_good'] = bool(unit_0.Trial_info.Trial_range_to_analyze[0] - 1
-                                                  <= tr_idx <= unit_0.Trial_info.Trial_range_to_analyze[-1] - 1)
-                trial_key['trial_type'], trial_key['trial_response'] = trial_type_and_response_dict[
-                    unit_0.Behavior.Trial_types_of_response_vector[tr_idx]]
-                trial_key['delay_duration'] = unit_0.Behavior.delay_dur[tr_idx] if 'delay_dur' in unit_0.Behavior._fieldnames else 1.2
+                trial_key['trial_stim_present'] = bool(stim_trial != 0)
+                trial_key['trial_is_good'] = bool(unit_0.Trial_info.Trial_range_to_analyze[0]
+                                                  <= tr_idx <= unit_0.Trial_info.Trial_range_to_analyze[-1])
+                trial_key['trial_type'], trial_key['trial_response'] = trial_type_and_response_dict[trial_type_of_response]
+                trial_key['delay_duration'] = (unit_0.Behavior.delay_dur[tr_idx]
+                                               if 'delay_dur' in unit_0.Behavior._fieldnames else 2)
                 acquisition.TrialSet.Trial.insert1(trial_key, ignore_extra_fields = True, skip_duplicates = True,
                                                    allow_direct_insert = True)
 
                 # ======== Now add trial event timing to the EventTime part table ====
                 events_time = dict(trial_start=0,
-                                   trial_stop=trial_key['stop_time'] - trial_key['start_time'] if mat_trial_info is not None else None,
-                                   first_lick=unit_0.Behavior.First_lick[tr_idx],
-                                   cue_start=unit_0.Behavior.Cue_start[tr_idx],
-                                   delay_start=unit_0.Behavior.Delay_start[tr_idx],
-                                   sampling_start=unit_0.Behavior.Sample_start[tr_idx])
+                                   trial_stop=(trial_key['stop_time'] - trial_key['start_time']
+                                               if mat_trial_info is not None else None),
+                                   first_lick=first_lick,
+                                   cue_start=cue_start,
+                                   delay_start=delay_start,
+                                   sampling_start=sample_start)
                 # -- events timing
                 acquisition.TrialSet.EventTime.insert((dict(trial_key, trial_event=k, event_time=e)
                                                        for k, e in events_time.items()),
@@ -151,10 +163,8 @@ for fname in fnames:
                                                       allow_direct_insert = True)
                 # ======== Now add trial stimulation descriptors to the TrialPhotoStimInfo table ====
                 trial_key['photo_stim_period'] = 'early delay'  # TODO: hardcoded here because this info is not available from data
-                trial_key['photo_stim_power'] = (re.search('(?<=_)\d+(?=mW_)',
-                                                           str(unit_0.Trial_info.Trial_types[tr_idx])).group()  # str() to safeguard against np.array([]) (probably typo)
-                                                 if re.search('(?<=_)\d+(?=mW_)',
-                                                              str(unit_0.Trial_info.Trial_types[tr_idx])) else None)
+                trial_key['photo_stim_power'] = (re.search('(?<=_)\d+(?=mW_)', str(trial_type)).group()  # str() to safeguard against np.array([]) (probably typo)
+                                                 if re.search('(?<=_)\d+(?=mW_)', str(trial_type)) else None)
                 stimulation.TrialPhotoStimInfo.insert1(trial_key, ignore_extra_fields=True, allow_direct_insert=True)
 
     # ==================== Extracellular ====================
@@ -163,11 +173,9 @@ for fname in fnames:
     chn_per_shank = 32
     probe_name = 'A2x32-8mm-25-250-165'
     # -- Probe
-    if {'probe_name': probe_name, 'channel_counts': channel_counts} not in reference.Probe.proj():
-        with reference.Probe.connection.transaction:
-            reference.Probe.insert1(
-                    {'probe_name': probe_name,
-                     'channel_counts': channel_counts})
+    with reference.Probe.connection.transaction:
+        if {'probe_name': probe_name, 'channel_counts': channel_counts} not in reference.Probe.proj():
+            reference.Probe.insert1({'probe_name': probe_name, 'channel_counts': channel_counts})
             reference.Probe.Channel.insert({'probe_name': probe_name, 'channel_counts': channel_counts,
                                             'channel_id': ch_idx, 'shank_id': int(ch_idx <= chn_per_shank) + 1}
                                            for ch_idx in np.arange(channel_counts) + 1)

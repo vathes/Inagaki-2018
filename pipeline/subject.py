@@ -27,7 +27,7 @@ class Allele(dj.Lookup):
 @schema
 class AlleleAlias(dj.Lookup):
     definition = """  # Other animal strain names that may be used interchangeably in different studies
-    allele_alias: varchar(128)
+    allele_alias: varchar(64)
     ---
     -> Allele
     """

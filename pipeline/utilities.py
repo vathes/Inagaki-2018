@@ -2,7 +2,7 @@ import os
 from datetime import datetime
 import re
 
-import h5py as h5
+import glob
 import numpy as np
 
 from . import reference, acquisition
@@ -11,7 +11,8 @@ from . import reference, acquisition
 # datetime format - should probably read this from a config file and not hard coded here
 datetime_formats = ('%Y%m%d', '%m/%d/%y')
 
-def try_parsing_date(text):
+
+def parse_date(text):
     for fmt in datetime_formats:
         cover = len(datetime.now().strftime(fmt))
         try:
@@ -32,25 +33,22 @@ def find_session_matched_matfile(sess_data_dir, key):
             exp_type = re.search('regular|EPSP',
                                  ';'.join((acquisition.Session.ExperimentType & key).fetch(
                                      'experiment_type'))).group()
-            fnames = (f for f in os.listdir(sess_data_dir) if f.find('.mat') != -1)
+            fnames = (f for f in glob.glob(os.path.join(sess_data_dir, '*.mat')))
             for f in fnames:
                 if f.find(f'{cell_id}_{exp_type}') != -1:
-                    sess_data_file = os.path.join(sess_data_dir, f)
+                    sess_data_file = f
                     break
         elif which_data == 'Probe':
-            fnames = np.hstack([os.path.join(dir_files[0], f) for f in dir_files[2] if f.find('.mat') != -1]
+            fnames = np.hstack(glob.glob(os.path.join(dir_files[0], '*.mat'))
                                for dir_files in os.walk(sess_data_dir) if len(dir_files[1]) == 0)
             for f in fnames:
                 if f.find(key['session_id']) != -1:
                     sess_data_file = f
                     break
 
-        # If session not found from dataset, break
         if sess_data_file is None:
-            print(f'Session not found! - Subject: {key["subject_id"]} - Date: {key["session_time"]}')
             return None
-        else: 
-            #print(f'Found datafile: {sess_data_file}')
+        else:
             return sess_data_file
  
        
@@ -62,5 +60,12 @@ def get_brain_hemisphere(brain_region):
     else:
         hemi = 'left'
     return brain_region, hemi
-        
+
+
+def split_list(arr, size):
+    slice_from = 0
+    while len(arr) > slice_from:
+        slice_to = slice_from + size
+        yield arr[slice_from:slice_to]
+        slice_from = slice_to
         

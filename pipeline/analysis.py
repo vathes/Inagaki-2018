@@ -67,7 +67,7 @@ def get_event_time(event_name, key):
     # get event time
     try:
         t = (acquisition.TrialSet.EventTime & key & {'trial_event': event_name}).fetch1('event_time')
-    except:
+    except dj.DataJointError:
         raise EventChoiceError(event_name, f'{event_name}: event not found')  
     if np.isnan(t):
         raise EventChoiceError(event_name, msg=f'{event_name}: event_time is nan')

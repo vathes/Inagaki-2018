@@ -45,8 +45,7 @@ class MembranePotential(dj.Imported):
         # Get the Session definition from the keys of this session
         sess_data_file = utilities.find_session_matched_matfile(sess_data_dir, key)
         if sess_data_file is None:
-            print(f'Intracellular import failed: ({key["subject_id"]} - {key["session_time"]})', file=sys.stderr)
-            return
+            raise FileNotFoundError(f'Intracellular import failed: ({key["subject_id"]} - {key["session_time"]})')
 
         mat_data = sio.loadmat(sess_data_file, struct_as_record = False, squeeze_me = True)['wholeCell']
 
@@ -81,8 +80,7 @@ class CurrentInjection(dj.Imported):
         # Get the Session definition from the keys of this session
         sess_data_file = utilities.find_session_matched_matfile(sess_data_dir, key)
         if sess_data_file is None:
-            print(f'Intracellular import failed: ({key["subject_id"]} - {key["session_time"]})', file=sys.stderr)
-            return
+            raise FileNotFoundError(f'Intracellular import failed: ({key["subject_id"]} - {key["session_time"]})')
 
         mat_data = sio.loadmat(sess_data_file, struct_as_record = False, squeeze_me = True)['wholeCell']
 
@@ -110,8 +108,7 @@ class CellSpikeTimes(dj.Imported):
         # Get the Session definition from the keys of this session
         sess_data_file = utilities.find_session_matched_matfile(sess_data_dir, key)
         if sess_data_file is None:
-            print(f'Intracellular import failed: ({key["subject_id"]} - {key["session_time"]})', file=sys.stderr)
-            return
+            raise FileNotFoundError(f'Intracellular import failed: ({key["subject_id"]} - {key["session_time"]})')
 
         mat_data = sio.loadmat(sess_data_file, struct_as_record = False, squeeze_me = True)['wholeCell']
 
@@ -147,7 +144,7 @@ class TrialSegmentedMembranePotential(dj.Computed):
 
         # Limit to insert size of 15 per insert
         insert_size = 15
-        trial_lists = split_list((acquisition.TrialSet.Trial & key).fetch('KEY'), insert_size)
+        trial_lists = utilities.split_list((acquisition.TrialSet.Trial & key).fetch('KEY'), insert_size)
 
         for b_idx, trials in enumerate(trial_lists):
             self.insert(dict({**key, **trial_key},
@@ -186,7 +183,6 @@ class TrialSegmentedCurrentInjection(dj.Computed):
                                                                                   current_injection, fs,
                                                                                   first_time_point))
                     for trial_key in (acquisition.TrialSet.Trial & key).fetch('KEY'))
-        # print(f'Perform trial-segmentation of current injection for trial: {key["trial_id"]}')
 
 
 @schema
@@ -207,8 +203,7 @@ class TrialSegmentedCellSpikeTimes(dj.Computed):
         try:
             event_time_point = analysis.get_event_time(event_name, key)
         except analysis.EventChoiceError as e:
-            print(f'Trial segmentation error - Msg: {str(e)}')
-            return
+            raise e
 
         pre_stim_dur = float(pre_stim_dur)
         post_stim_dur = float(post_stim_dur)
@@ -267,13 +262,4 @@ def perform_trial_segmentation(trial_key, event_name, pre_stim_dur, post_stim_du
                                 np.full(post_stim_nan_count, np.nan)))
     return segmented_data[:sample_total]
 
-
-def split_list(arr, size):
-    arrs = []
-    while len(arr) > size:
-        pice = arr[:size]
-        arrs.append(pice)
-        arr = arr[size:]
-    arrs.append(arr)
-    return arrs
 

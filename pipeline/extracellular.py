@@ -59,8 +59,7 @@ class UnitSpikeTimes(dj.Imported):
         sess_data_file = utilities.find_session_matched_matfile(sess_data_dir, key)
 
         if sess_data_file is None:
-            print(f'Extracellular import failed: ({key["subject_id"]} - {key["session_time"]})', file=sys.stderr)
-            return
+            raise FileNotFoundError(f'Extracellular import failed: ({key["subject_id"]} - {key["session_time"]})')
 
         mat_units = sio.loadmat(sess_data_file, struct_as_record = False, squeeze_me = True)['unit']
         for unit_idx, unit in tqdm.tqdm(enumerate(mat_units)):
@@ -92,8 +91,8 @@ class TrialSegmentedUnitSpikeTimes(dj.Imported):
         sess_data_file = utilities.find_session_matched_matfile(sess_data_dir, key)
 
         if sess_data_file is None:
-            print(f'Extracellular import failed: ({key["subject_id"]} - {key["session_time"]})', file=sys.stderr)
-            return
+            raise FileNotFoundError(f'Extracellular import failed: ({key["subject_id"]} - {key["session_time"]})')
+
         mat_units = sio.loadmat(sess_data_file, struct_as_record = False, squeeze_me = True)['unit']
 
         unit_ids, spike_times = (UnitSpikeTimes & key).fetch('unit_id', 'spike_times')  # spike_times from all units
@@ -110,7 +109,7 @@ class TrialSegmentedUnitSpikeTimes(dj.Imported):
             try:
                 event_time_point = analysis.get_event_time(event_name, trial_key)
             except analysis.EventChoiceError as e:
-                print(f'Trial segmentation error - Msg: {str(e)}')
+                print(f'Trial segmentation error - Msg: {str(e)}', file=sys.stderr)
                 continue
 
             pre_stim_dur = float(pre_stim_dur)

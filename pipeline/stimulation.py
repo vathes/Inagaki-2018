@@ -41,7 +41,7 @@ class PhotoStimulationInfo(dj.Manual):
 
 @schema
 class PhotoStimulation(dj.Manual):
-    definition = """  #  Photostimulus profile used for stimulation in this session
+    definition = """  #  Photostimulus settings used for stimulation in this session
     -> acquisition.Session
     photostim_datetime: datetime # the time of performing this stimulation with respect to start time of the session, in the scenario of multiple stimulations per session
     ---
