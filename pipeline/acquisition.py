@@ -28,12 +28,12 @@ class ExperimentType(dj.Lookup):
 @schema
 class Session(dj.Manual):
     definition = """
-    session_id: varchar(32)
-    ---
     -> subject.Subject
     session_time: datetime    # session time
+    session_id: varchar(24)
+    ---
     session_directory = "": varchar(256)
-    session_note = "" : varchar(256) 
+    session_note = "": varchar(256) 
     """
 
     class Experimenter(dj.Part):
@@ -68,7 +68,7 @@ class TrialSet(dj.Imported):
         -> reference.TrialResponse
         trial_stim_present: bool  # is this a stim or no-stim trial
         trial_is_good: bool  # good/bad status of trial (bad trials are not analyzed)
-        delay_duration: float  # (s) duration of the delay period
+        delay_duration: decimal(6,2)  # (s) duration of the delay period
         """
         
     class EventTime(dj.Part):
@@ -81,5 +81,5 @@ class TrialSet(dj.Imported):
 
     def make(self, key):
         # this function implements the ingestion of Trial data into the pipeline
-        return None
+        return NotImplementedError
     

@@ -9,7 +9,6 @@ from datetime import datetime
 import numpy as np
 import scipy.io as sio
 import datajoint as dj
-import h5py as h5
 
 from . import reference, utilities, acquisition, analysis
 
@@ -26,7 +25,7 @@ class Cell(dj.Manual):
     cell_depth: float  # (um)
     -> reference.BrainLocation
     -> reference.WholeCellDevice
-    """  
+    """
 
 
 @schema
@@ -34,7 +33,7 @@ class MembranePotential(dj.Imported):
     definition = """
     -> Cell
     ---
-    membrane_potential: longblob    # (mV) membrane potential recording at this cell
+    membrane_potential: longblob  # (mV) membrane potential recording at this cell
     membrane_potential_wo_spike: longblob # (mV) membrane potential without spike data, derived from membrane potential recording    
     membrane_potential_start_time: float # (s) first timepoint of membrane potential recording
     membrane_potential_sampling_rate: float # (Hz) sampling rate of membrane potential recording
@@ -96,6 +95,7 @@ class CurrentInjection(dj.Imported):
             current_injection_start_time=0,
             current_injection_sampling_rate=mat_data.recording_data.sample_rate))
 
+
 @schema
 class CellSpikeTimes(dj.Imported):
     definition = """
@@ -134,6 +134,8 @@ class TrialSegmentedMembranePotential(dj.Computed):
     segmented_mp_wo_spike: longblob
     """
 
+    key_source = MembranePotential * acquisition.TrialSet * analysis.TrialSegmentationSetting
+
     def make(self, key):
         # get event, pre/post stim duration
         event_name, pre_stim_dur, post_stim_dur = (analysis.TrialSegmentationSetting & key).fetch1(
@@ -142,15 +144,21 @@ class TrialSegmentedMembranePotential(dj.Computed):
         fs, first_time_point, Vm_wo_spike, Vm_w_spike = (MembranePotential & key).fetch1(
             'membrane_potential_sampling_rate', 'membrane_potential_start_time', 'membrane_potential_wo_spike',
             'membrane_potential')
-        # segmentation
-        segmented_Vm_wo_spike = perform_trial_segmentation(key, event_name, pre_stim_dur, post_stim_dur,
-                                                           Vm_wo_spike, fs, first_time_point)
-        segmented_Vm_w_spike = perform_trial_segmentation(key, event_name, pre_stim_dur, post_stim_dur,
-                                                          Vm_w_spike, fs, first_time_point)
-        self.insert1(dict(key,
-                          segmented_mp = segmented_Vm_w_spike,
-                          segmented_mp_wo_spike = segmented_Vm_wo_spike))
-        print(f'Perform trial-segmentation of membrane potential for trial: {key["trial_id"]}')
+
+        # Limit to insert size of 15 per insert
+        insert_size = 15
+        trial_lists = split_list((acquisition.TrialSet.Trial & key).fetch('KEY'), insert_size)
+
+        for b_idx, trials in enumerate(trial_lists):
+            self.insert(dict({**key, **trial_key},
+                             segmented_mp = perform_trial_segmentation(trial_key, event_name,
+                                                                        pre_stim_dur, post_stim_dur,
+                                                                        Vm_w_spike, fs, first_time_point),
+                             segmented_mp_wo_spike = perform_trial_segmentation(trial_key, event_name,
+                                                                                 pre_stim_dur, post_stim_dur,
+                                                                                 Vm_wo_spike, fs, first_time_point))
+                        for trial_key in trials)
+            print(f'-> Batch Insert: {b_idx+1}/{len(trial_lists)}')
 
 
 @schema
@@ -163,6 +171,8 @@ class TrialSegmentedCurrentInjection(dj.Computed):
     segmented_current_injection: longblob
     """
 
+    key_source = CurrentInjection * acquisition.TrialSet * analysis.TrialSegmentationSetting
+
     def make(self, key):
         # get event, pre/post stim duration
         event_name, pre_stim_dur, post_stim_dur = (analysis.TrialSegmentationSetting & key).fetch1(
@@ -170,10 +180,13 @@ class TrialSegmentedCurrentInjection(dj.Computed):
         # get raw
         fs, first_time_point, current_injection = (CurrentInjection & key).fetch1(
             'current_injection_sampling_rate', 'current_injection_start_time', 'current_injection')
-        segmented_current_injection = perform_trial_segmentation(key, event_name, pre_stim_dur, post_stim_dur,
-                                                                 current_injection, fs, first_time_point)
-        self.insert1(dict(key, segmented_current_injection = segmented_current_injection))
-        print(f'Perform trial-segmentation of current injection for trial: {key["trial_id"]}')
+        self.insert(dict({**key, **trial_key},
+                         segmented_current_injection = perform_trial_segmentation(trial_key, event_name,
+                                                                                  pre_stim_dur, post_stim_dur,
+                                                                                  current_injection, fs,
+                                                                                  first_time_point))
+                    for trial_key in (acquisition.TrialSet.Trial & key).fetch('KEY'))
+        # print(f'Perform trial-segmentation of current injection for trial: {key["trial_id"]}')
 
 
 @schema
@@ -203,11 +216,11 @@ class TrialSegmentedCellSpikeTimes(dj.Computed):
         trial_start, trial_stop = (acquisition.TrialSet.Trial & key).fetch1('start_time', 'stop_time')
         event_time_point = event_time_point + trial_start
 
-        if event_time_point - pre_stim_dur < trial_start:
-            print('Warning: Out of bound prestimulus duration, set to 0')
-            pre_stim_dur = 0
+        if trial_start and event_time_point - pre_stim_dur < 0:
+            print('Warning: Out of bound pre-stim dur, select spikes from start-time (t=0)')
+            pre_stim_dur = event_time_point - trial_start
         if event_time_point + post_stim_dur > trial_stop:
-            print('Warning: Out of bound poststimulus duration, set to trial end time')
+            print('Warning: Out of bound post-stim dur, set to trial end time')
             post_stim_dur = trial_stop - event_time_point
 
         # get raw & segment
@@ -229,6 +242,7 @@ def perform_trial_segmentation(trial_key, event_name, pre_stim_dur, post_stim_du
     #
     pre_stim_dur = float(pre_stim_dur)
     post_stim_dur = float(post_stim_dur)
+    sample_total = int((post_stim_dur + pre_stim_dur)*fs) + 1
     # check if pre/post stim dur is within start/stop time, if not, pad with NaNs
     trial_start, trial_stop = (acquisition.TrialSet.Trial & trial_key).fetch1('start_time', 'stop_time')
     event_time_point = event_time_point + trial_start
@@ -236,20 +250,30 @@ def perform_trial_segmentation(trial_key, event_name, pre_stim_dur, post_stim_du
     pre_stim_nan_count = 0
     post_stim_nan_count = 0
     if trial_start and event_time_point - pre_stim_dur < trial_start:
-        pre_stim_nan_count = int((trial_start - (event_time_point - pre_stim_dur)) * fs)
-        pre_stim_dur = 0
-        print(f'Warning: Out of bound prestimulus duration, pad {pre_stim_nan_count} NaNs')
+        pre_stim_nan_count = int(np.ceil((trial_start - (event_time_point - pre_stim_dur)) * fs))
+        pre_stim_dur = event_time_point - trial_start
+        print(f'Warning: Out-of-bound pre-stim dur, pad {pre_stim_nan_count} NaNs')
     if trial_stop and event_time_point + post_stim_dur > trial_stop:
-        post_stim_nan_count = int((event_time_point + post_stim_dur - trial_stop) * fs)
+        post_stim_nan_count = int(np.ceil((event_time_point + post_stim_dur - trial_stop) * fs))
         post_stim_dur = trial_stop - event_time_point
-        print(f'Warning: Out of bound poststimulus duration, pad {post_stim_nan_count} NaNs')
+        print(f'Warning: Out-of-bound post-stim dur, pad {post_stim_nan_count} NaNs')
 
     event_sample_point = (event_time_point - first_time_point) * fs
-
     sample_points_to_extract = range((event_sample_point - pre_stim_dur * fs).astype(int),
                                      (event_sample_point + post_stim_dur * fs + 1).astype(int))
     segmented_data = data[sample_points_to_extract]
     # pad with NaNs
     segmented_data = np.hstack((np.full(pre_stim_nan_count, np.nan), segmented_data,
                                 np.full(post_stim_nan_count, np.nan)))
-    return segmented_data
+    return segmented_data[:sample_total]
+
+
+def split_list(arr, size):
+    arrs = []
+    while len(arr) > size:
+        pice = arr[:size]
+        arrs.append(pice)
+        arr = arr[size:]
+    arrs.append(arr)
+    return arrs
+

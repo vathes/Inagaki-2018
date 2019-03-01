@@ -9,7 +9,6 @@ from datetime import datetime
 import numpy as np
 import scipy.io as sio
 import datajoint as dj
-import h5py as h5
 import tqdm
 
 from . import reference, utilities, acquisition, analysis
@@ -38,7 +37,7 @@ class Voltage(dj.Imported):
 
     def make(self, key):
         # this function implements the ingestion of raw extracellular data into the pipeline
-        return None
+        return NotImplementedError
 
 
 @schema
@@ -85,6 +84,8 @@ class TrialSegmentedUnitSpikeTimes(dj.Imported):
     segmented_spike_times: longblob  # (s) with respect to the start of the trial
     """
 
+    key_source = ProbeInsertion * analysis.TrialSegmentationSetting
+
     def make(self, key):
         # get data
         sess_data_dir = os.path.join('.', 'data', 'SiliconProbeData')
@@ -95,33 +96,43 @@ class TrialSegmentedUnitSpikeTimes(dj.Imported):
             return
         mat_units = sio.loadmat(sess_data_file, struct_as_record = False, squeeze_me = True)['unit']
 
+        unit_ids, spike_times = (UnitSpikeTimes & key).fetch('unit_id', 'spike_times')  # spike_times from all units
+        trial_idx_of_spike = [mat_units[unit_id].Trial_idx_of_spike for unit_id in unit_ids]
+
+        trial_keys = (acquisition.TrialSet.Trial & key).fetch('KEY')
+
         # get event, pre/post stim duration
         event_name, pre_stim_dur, post_stim_dur = (analysis.TrialSegmentationSetting & key).fetch1(
             'event', 'pre_stim_duration', 'post_stim_duration')
-        # get event time
-        try:
-            event_time_point = analysis.get_event_time(event_name, key)
-        except analysis.EventChoiceError as e:
-            print(f'Trial segmentation error - Msg: {str(e)}')
-            return
 
-        pre_stim_dur = float(pre_stim_dur)
-        post_stim_dur = float(post_stim_dur)
-        # check if pre/post stim dur is within start/stop time
-        trial_start, trial_stop = (acquisition.TrialSet.Trial & key).fetch1('start_time', 'stop_time')
-        if trial_start and event_time_point - pre_stim_dur < 0:
-            print('Warning: Out of bound prestimulus duration, select spikes from start-time (t=0)')
-            pre_stim_dur = event_time_point
-        if trial_stop and event_time_point + post_stim_dur > trial_stop:
-            print('Warning: Out of bound poststimulus duration, set to trial end time')
-            post_stim_dur = trial_stop - event_time_point
+        for trial_key in tqdm.tqdm(trial_keys):
+            # get event time - this is done per trial
+            try:
+                event_time_point = analysis.get_event_time(event_name, trial_key)
+            except analysis.EventChoiceError as e:
+                print(f'Trial segmentation error - Msg: {str(e)}')
+                continue
 
-        # get raw & segment
-        spike_times = (UnitSpikeTimes & key).fetch1('spike_times')[
-            mat_units[key['unit_id']].Trial_idx_of_spike - 1 == key['trial_id']]  # -1 to account for MATLAB 1-based indexing
-        key['segmented_spike_times'] = spike_times[np.logical_and(
-            (spike_times >= (event_time_point - pre_stim_dur)),
-            (spike_times <= (event_time_point + post_stim_dur)))] - event_time_point
+            pre_stim_dur = float(pre_stim_dur)
+            post_stim_dur = float(post_stim_dur)
+            # check if pre/post stim dur is within start/stop time
+            trial_start, trial_stop = (acquisition.TrialSet.Trial & trial_key).fetch1('start_time', 'stop_time')
+            if trial_start and event_time_point - pre_stim_dur < 0:
+                print('Warning: Out of bound prestimulus duration, select spikes from start-time (t=0)')
+                pre_stim_dur = event_time_point
+            if trial_stop and event_time_point + post_stim_dur > trial_stop:
+                print('Warning: Out of bound poststimulus duration, set to trial end time')
+                post_stim_dur = trial_stop - event_time_point
 
-        self.insert1(key)
-        print(f'Ingest trial-seg spike times for unit: {key["unit_id"]} - trial: {key["trial_id"]}')
+            # get spike times of each unit for this trial
+            trial_spike_times = [spk[tr_spk_idx == trial_key['trial_id']]
+                                 for spk, tr_spk_idx in zip(spike_times, trial_idx_of_spike)]
+            # further segment based on pre/post stimulus duration
+            seg_trial_spike_times = [spk[np.logical_and((spk >= (event_time_point - pre_stim_dur)),
+                                                        (spk <= (event_time_point + post_stim_dur)))] - event_time_point
+                                     for spk in trial_spike_times]
+
+            self.insert(dict({**key, **trial_key},
+                             unit_id=u_id,
+                             segmented_spike_times=spk)
+                        for u_id, spk in zip(unit_ids, seg_trial_spike_times))

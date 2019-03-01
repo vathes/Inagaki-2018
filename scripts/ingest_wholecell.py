@@ -53,26 +53,26 @@ for fname in fnames:
     print(f'\nReading: {fname}')
 
     subject_info = dict(subject_id=this_sess.subject_id.lower(),
-                        date_of_birth=datetime.strptime(str(this_sess.date_of_birth), '%Y%m%d'),
+                        date_of_birth=utilities.try_parsing_date(str(this_sess.date_of_birth)),
                         species='Mus musculus',  # not available, hard-coded here
                         animal_source='N/A')  # animal source not available from data, nor 'sex'
 
-    # Strain
-    strain_dict = {alias.lower(): strain for alias, strain in subject.StrainAlias.fetch()}
-    regex_str = ''.join([re.escape(alias) + '|' for alias in strain_dict.keys()])[:-1]
-    strains = [strain_dict[s.lower()] for s in re.findall(regex_str, this_sess.genotype, re.I)]
+    # allele
+    allele_dict = {alias.lower(): allele for alias, allele in subject.AlleleAlias.fetch()}
+    regex_str = ''.join([re.escape(alias) + '|' for alias in allele_dict.keys()])[:-1]
+    alleles = [allele_dict[s.lower()] for s in re.findall(regex_str, this_sess.genotype, re.I)]
 
     if subject_info not in subject.Subject.proj():
         with subject.Subject.connection.transaction:
             subject.Subject.insert1(subject_info, ignore_extra_fields=True)
-            subject.Subject.Strain.insert((dict(subject_info, strain = k)
-                                           for k in strains), ignore_extra_fields = True)
+            subject.Subject.Allele.insert((dict(subject_info, allele = k)
+                                           for k in alleles), ignore_extra_fields = True)
 
     # ==================== session ====================
     # -- session_time
-    session_time = datetime.strptime(str(this_sess.session_time), '%Y%m%d')
+    session_time = utilities.try_parsing_date(str(this_sess.session_time))
     session_info = dict(subject_info,
-                        session_id=uuid.uuid4().hex,
+                        session_id=fname.replace('.mat', ''),
                         session_time=session_time)
 
     experimenters = ['Hidehiko Inagaki']  # hard-coded here
@@ -80,7 +80,7 @@ for fname in fnames:
     experiment_types = [experiment_types] if isinstance(experiment_types, str) else experiment_types
     experiment_types.append('intracellular')
     experiment_types.append(re.search("regular|EPSP", fname).group())
-    
+
 
     # experimenter and experiment type (possible multiple experimenters or types)
     # no experimenter info
@@ -124,9 +124,10 @@ for fname in fnames:
         acquisition.TrialSet.insert1(trial_key, allow_direct_insert=True, ignore_extra_fields = True)
 
         for tr_idx, events_time in tqdm(enumerate(mat_data.behavioral_data.behav_timing)):
-            trial_key['trial_id'] = tr_idx
+            trial_key['trial_id'] = tr_idx + 1  # trial-number starts from 1
             trial_key['start_time'] = mat_data.behavioral_data.trial_onset_bin[tr_idx] / fs
-            trial_key['stop_time'] = trial_key['start_time'] + events_time.end_time
+            trial_key['stop_time'] = min(trial_key['start_time'] + events_time.end_time,
+                                         (len(mat_data.recording_data.Vm) - 1) / fs)
             trial_key['trial_stim_present'] = bool(mat_data.behavioral_data.AOM_on_or_off[tr_idx])
             trial_key['trial_is_good'] = True  #  no info of trial good/bad status, assuming all trials are good
             trial_key['trial_type'], trial_key['trial_response'] = trial_type_and_response_dict[
@@ -203,16 +204,3 @@ for fname in fnames:
                                              dict({**session_info, **photim_stim_info},
                                                   photostim_datetime=session_info['session_time'])
                                              , ignore_extra_fields=True)
-
-# ====================== Starting import and compute procedure ======================
-print('======== Populate() Routine =====')
-# -- Intracellular
-intracellular.MembranePotential.populate(reserve_jobs=True)
-intracellular.CurrentInjection.populate(reserve_jobs=True)
-intracellular.CellSpikeTimes.populate(reserve_jobs=True)
-
-intracellular.TrialSegmentedMembranePotential.populate(reserve_jobs=True)
-intracellular.TrialSegmentedCurrentInjection.populate(reserve_jobs=True)
-intracellular.TrialSegmentedCellSpikeTimes.populate(reserve_jobs=True)
-
-behavior.TrialSegmentedLickTrace.populate(reserve_jobs=True)

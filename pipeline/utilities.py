@@ -9,21 +9,16 @@ from . import reference, acquisition
 
 
 # datetime format - should probably read this from a config file and not hard coded here
-datetimeformat_ymdhms = '%Y%m%d'
-datetimeformat_ymd = '%m%d%y'
+datetime_formats = ('%Y%m%d', '%m/%d/%y')
 
-def parse_prefix(line):
-    cover = len(datetime.now().strftime(datetimeformat_ymdhms))
-    try:
-        return datetime.strptime(line[:cover], datetimeformat_ymdhms)
-    except Exception as e:
-        msg = f'Error:  {str(e)} \n'
-        cover = len(datetime.now().strftime(datetimeformat_ymd))
+def try_parsing_date(text):
+    for fmt in datetime_formats:
+        cover = len(datetime.now().strftime(fmt))
         try:
-            return datetime.strptime(line[:cover], datetimeformat_ymd)
-        except Exception as e:
-            print(f'{msg}\t{str(e)}\n\tReturn None')
-            return None    
+            return datetime.strptime(text[:cover], fmt)
+        except ValueError:
+            pass
+    raise ValueError('no valid date format found')
 
 
 def find_session_matched_matfile(sess_data_dir, key):

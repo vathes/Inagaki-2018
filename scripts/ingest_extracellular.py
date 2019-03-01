@@ -22,21 +22,31 @@ fixed_delay_xlsx = pd.read_excel(
     os.path.join('.', 'data', 'SiliconProbeData', 'FixedDelayTask', 'SI_table_2_bilateral_perturb.xlsx'),
     index_col =0, usecols='A, P, Q, R, S', skiprows=2, nrows=20)
 fixed_delay_xlsx.columns = ['subject_id', 'genotype', 'date_of_birth', 'session_time']
+fixed_delay_xlsx['sex'] = 'Unknown'
 fixed_delay_xlsx['sess_type'] = 'fixed_delay'
 # Random-long-delay
 random_long_delay_xlsx = pd.read_excel(
     os.path.join('.', 'data', 'SiliconProbeData', 'RandomDelayTask', 'SI_table_3_random_delay_perturb.xlsx'),
     index_col =0, usecols='A, P, Q, R, S', skiprows=5, nrows=23)
 random_long_delay_xlsx.columns = ['subject_id', 'genotype', 'date_of_birth', 'session_time']
-random_long_delay_xlsx['sess_type'] = 'random_long_delay'
+random_long_delay_xlsx['sex'] = 'Unknown'
+random_long_delay_xlsx['sess_type'] = 'Auditory task'
 # Random-short-delay
 random_short_delay_xlsx = pd.read_excel(
     os.path.join('.', 'data', 'SiliconProbeData', 'RandomDelayTask', 'SI_table_3_random_delay_perturb.xlsx'),
     index_col =0, usecols='A, F, G, H, I', skiprows=42, nrows=11)
 random_short_delay_xlsx.columns = ['subject_id', 'genotype', 'date_of_birth', 'session_time']
-random_short_delay_xlsx['sess_type'] = 'random_short_delay'
-# concat all 3
-meta_data = pd.concat([fixed_delay_xlsx, random_long_delay_xlsx, random_short_delay_xlsx])
+random_short_delay_xlsx['sex'] = 'Unknown'
+random_short_delay_xlsx['sess_type'] = 'Auditory task'
+# Tactile-task
+tactile_xlsx = pd.read_csv(
+    os.path.join('.', 'data', 'SiliconProbeData', 'TactileTask', 'Whisker_taskTavle_for_paper.csv'),
+    index_col =0, usecols= [0, 5, 6, 7, 8, 9], skiprows=1, nrows=30)
+tactile_xlsx.columns = ['subject_id', 'genotype', 'date_of_birth', 'sex', 'session_time']
+tactile_xlsx = tactile_xlsx.reindex(columns=['subject_id', 'genotype', 'date_of_birth', 'session_time', 'sex'])
+tactile_xlsx['sess_type'] = 'Tactile task'
+# concat all 4
+meta_data = pd.concat([fixed_delay_xlsx, random_long_delay_xlsx, random_short_delay_xlsx, tactile_xlsx])
 
 trial_type_and_response_dict = {1: ('lick right', 'correct'),
                                 2: ('lick left', 'correct'),
@@ -56,37 +66,39 @@ fnames = np.hstack([os.path.join(dir_files[0], f) for f in dir_files[2] if f.fin
           for dir_files in os.walk(path) if len(dir_files[1]) == 0)
 
 for fname in fnames:
-    mat_units = sio.loadmat(fname, struct_as_record = False, squeeze_me = True)['unit']
-    this_sess = meta_data.loc[os.path.split(fname)[-1].replace('_units.mat', '')]
+    mat = sio.loadmat(fname, struct_as_record = False, squeeze_me = True)
+    mat_units = mat['unit']
+    mat_trial_info = mat['trial_info'] if 'trial_info' in mat.keys() else None
+    this_sess = meta_data.loc[re.sub('_units.mat|_JRC_units', '', os.path.split(fname)[-1])]
     print(f'\nReading: {this_sess.name}')
 
     subject_info = dict(subject_id=this_sess.subject_id.lower(),
-                        date_of_birth=datetime.strptime(str(this_sess.date_of_birth), '%Y%m%d'),
+                        date_of_birth=utilities.try_parsing_date(str(this_sess.date_of_birth)),
+                        sex=this_sess.sex[0].upper(),
                         species='Mus musculus',  # not available, hard-coded here
-                        animal_source='N/A')  # animal source not available from data, nor 'sex'
+                        animal_source='N/A')  # animal source not available from data
 
-    strain_dict = {alias.lower(): strain for alias, strain in subject.StrainAlias.fetch()}
-    regex_str = ''.join([re.escape(alias) + '|' for alias in strain_dict.keys()])[:-1]
-    strains = [strain_dict[s.lower()] for s in re.findall(regex_str, this_sess.genotype, re.I)]
+    allele_dict = {alias.lower(): allele for alias, allele in subject.AlleleAlias.fetch()}
+    regex_str = ''.join([re.escape(alias) + '|' for alias in allele_dict.keys()])[:-1]
+    alleles = [allele_dict[s.lower()] for s in re.findall(regex_str, this_sess.genotype, re.I)]
 
     if subject_info not in subject.Subject.proj():
         with subject.Subject.connection.transaction:
             subject.Subject.insert1(subject_info, ignore_extra_fields=True)
-            subject.Subject.Strain.insert((dict(subject_info, strain = k)
-                                           for k in strains), ignore_extra_fields = True)
+            subject.Subject.Allele.insert((dict(subject_info, allele = k)
+                                           for k in alleles), ignore_extra_fields = True)
 
     # ==================== session ====================
     # -- session_time
-    session_time = datetime.strptime(str(this_sess.session_time), '%Y%m%d')
+    session_time = utilities.try_parsing_date(str(this_sess.session_time))
     session_info = dict(subject_info,
-                        session_id=this_sess.name,
+                        session_id='_'.join(this_sess.name.split('_')[:2]),
                         session_time=session_time)
 
     experimenters = ['Hidehiko Inagaki']  # hard-coded here
     experiment_types = this_sess.sess_type
     experiment_types = [experiment_types] if isinstance(experiment_types, str) else experiment_types
     experiment_types.append('extracellular')
-    experiment_types.append('Auditory task')  # hard-coded here, all probe data from this set are Auditory
 
     # experimenter and experiment type (possible multiple experimenters or types)
     # no experimenter info
@@ -102,20 +114,23 @@ for fname in fnames:
     # ==================== Trials ====================
     # Trial Info for all units are the same -> pick unit[0] to extract trial info
     unit_0 = mat_units[0]
-    fs = unit_0.Meta_data.parameters.Sample_Rate
     trial_key = dict(session_info, trial_counts=len(unit_0.Trial_info.Trial_types))
     if trial_key not in acquisition.TrialSet.proj():
+        fs = unit_0.Meta_data.parameters.Sample_Rate
+        if mat_trial_info is not None:  # handle different fieldnames "Sampling_start" vs "Sample_start" in tactile_task dataset
+            unit_0.Behavior.Sample_start = unit_0.Behavior.Sampling_start
+
         with acquisition.TrialSet.connection.transaction:
             print('\nInsert trial information')
             acquisition.TrialSet.insert1(trial_key, allow_direct_insert=True, ignore_extra_fields = True)
 
             for tr_idx in tqdm(np.arange(len(unit_0.Trial_info.Trial_types))):
-                trial_key['trial_id'] = tr_idx
-                trial_key['start_time'] = None  # hard-coded here, no trial-start times found in data
-                trial_key['stop_time'] = None  # hard-coded here, no trial-end times found in data
+                trial_key['trial_id'] = tr_idx + 1  # trial-number starts from 1
+                trial_key['start_time'] = mat_trial_info[tr_idx].onset / fs if mat_trial_info is not None else None  # hard-coded here, no trial-start times found in data for 1st paper
+                trial_key['stop_time'] = mat_trial_info[tr_idx].offset / fs if mat_trial_info is not None else None  # hard-coded here, no trial-end times found in data
                 trial_key['trial_stim_present'] = bool(unit_0.Behavior.stim_trial_vector[tr_idx] != 0)
-                trial_key['trial_is_good'] = bool(unit_0.Trial_info.Trial_range_to_analyze[0]
-                                                  <= tr_idx <= unit_0.Trial_info.Trial_range_to_analyze[-1])
+                trial_key['trial_is_good'] = bool(unit_0.Trial_info.Trial_range_to_analyze[0] - 1
+                                                  <= tr_idx <= unit_0.Trial_info.Trial_range_to_analyze[-1] - 1)
                 trial_key['trial_type'], trial_key['trial_response'] = trial_type_and_response_dict[
                     unit_0.Behavior.Trial_types_of_response_vector[tr_idx]]
                 trial_key['delay_duration'] = unit_0.Behavior.delay_dur[tr_idx] if 'delay_dur' in unit_0.Behavior._fieldnames else 1.2
@@ -124,7 +139,7 @@ for fname in fnames:
 
                 # ======== Now add trial event timing to the EventTime part table ====
                 events_time = dict(trial_start=0,
-                                   trial_stop=None,
+                                   trial_stop=trial_key['stop_time'] - trial_key['start_time'] if mat_trial_info is not None else None,
                                    first_lick=unit_0.Behavior.First_lick[tr_idx],
                                    cue_start=unit_0.Behavior.Cue_start[tr_idx],
                                    delay_start=unit_0.Behavior.Delay_start[tr_idx],
@@ -163,6 +178,8 @@ for fname in fnames:
                       'brain_subregion': 'N/A',
                       'cortical_layer': 'N/A',
                       'hemisphere': hemisphere}
+    if brain_location not in reference.BrainLocation.proj():
+        reference.BrainLocation.insert1(brain_location)
 
     # -- ProbeInsertion
     probe_insertion = dict({**session_info, **brain_location},
@@ -216,9 +233,4 @@ for fname in fnames:
                                                   photostim_datetime=session_info['session_time'])
                                              , ignore_extra_fields=True)
 
-# ====================== Starting import and compute procedure ======================
-print('======== Populate() Routine =====')
-analysis.RealignedEvent.populate(reserve_jobs=True)
-extracellular.UnitSpikeTimes.populate(reserve_jobs=True)
-extracellular.TrialSegmentedUnitSpikeTimes.populate(reserve_jobs=True)
 
