@@ -44,7 +44,7 @@ class TrialSegmentedLickTrace(dj.Imported):
             return
         mat_data = sio.loadmat(sess_data_file, struct_as_record = False, squeeze_me = True)['wholeCell']
         #  ============= Now read the data and start ingesting =============
-        lick_times = {k_n: mat_data.behavioral_data.behav_timing[key['trial_id']].__getattribute__(n)
+        lick_times = {k_n: mat_data.behavioral_data.behav_timing[key['trial_id'] - 1].__getattribute__(n)
                       for k_n, n in zip(['segmented_lick_left_on', 'segmented_lick_left_off',
                                          'segmented_lick_right_on', 'segmented_lick_right_off'],
                                         ['lickL_on_time', 'lickL_off_time',
