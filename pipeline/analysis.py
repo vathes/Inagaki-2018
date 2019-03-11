@@ -63,20 +63,22 @@ class RealignedEvent(dj.Computed):
                                        for e_idx, eve in enumerate(events))
 
 
+
 def get_event_time(event_name, key):
     # get event time
     try:
         t = (acquisition.TrialSet.EventTime & key & {'trial_event': event_name}).fetch1('event_time')
     except dj.DataJointError:
-        raise EventChoiceError(event_name, f'{event_name}: event not found')  
+        raise EventChoiceError(event_name, f'{event_name}: event not found')
     if np.isnan(t):
-        raise EventChoiceError(event_name, msg=f'{event_name}: event_time is nan')
+        raise EventChoiceError(event_name, msg = f'{event_name}: event_time is nan')
     else:
         return t
-    
-    
+
+
 class EventChoiceError(Exception):
     '''Raise when "event" does not exist or "event_type" is invalid (e.g. nan)'''
+
     def __init__(self, event_name, msg=None):
         if msg is None:
             msg = f'Invalid event type or time for: {event_name}'

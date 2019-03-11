@@ -165,7 +165,7 @@ for fname in fnames:
                 trial_key['photo_stim_period'] = 'early delay'  # TODO: hardcoded here because this info is not available from data
                 trial_key['photo_stim_power'] = (re.search('(?<=_)\d+(?=mW_)', str(trial_type)).group()  # str() to safeguard against np.array([]) (probably typo)
                                                  if re.search('(?<=_)\d+(?=mW_)', str(trial_type)) else None)
-                stimulation.TrialPhotoStimInfo.insert1(trial_key, ignore_extra_fields=True, allow_direct_insert=True)
+                stimulation.TrialPhotoStimParam.insert1(trial_key, ignore_extra_fields=True, allow_direct_insert=True)
 
     # ==================== Extracellular ====================
     # no info about Probe or recording location from data, all hardcoded from paper
@@ -186,14 +186,12 @@ for fname in fnames:
                       'brain_subregion': 'N/A',
                       'cortical_layer': 'N/A',
                       'hemisphere': hemisphere}
-    if brain_location not in reference.BrainLocation.proj():
-        reference.BrainLocation.insert1(brain_location)
+    reference.BrainLocation.insert1(brain_location, skip_duplicates=True)
 
     # -- ProbeInsertion
     probe_insertion = dict({**session_info, **brain_location},
                            probe_name=probe_name, channel_counts=channel_counts)
-    if probe_insertion not in extracellular.ProbeInsertion.proj():
-        extracellular.ProbeInsertion.insert1(probe_insertion, ignore_extra_fields=True)
+    extracellular.ProbeInsertion.insert1(probe_insertion, ignore_extra_fields=True, skip_duplicates=True)
 
     # ==================== photostim ====================
     # no info on photostim available from data, all photostim info here are hard-coded from the paper
@@ -215,20 +213,17 @@ for fname in fnames:
                       'brain_subregion': 'N/A',
                       'cortical_layer': 'N/A',
                       'hemisphere': hemisphere}
-    if brain_location not in reference.BrainLocation.proj():
-        reference.BrainLocation.insert1(brain_location)
+    reference.BrainLocation.insert1(brain_location, skip_duplicates=True)
     # -- ActionLocation
     action_location = dict(brain_location,
                            coordinate_ref = 'bregma',
                            coordinate_ap = round(Decimal(coord_ap_ml_dv[0]), 2),
                            coordinate_ml = round(Decimal(coord_ap_ml_dv[1]), 2),
                            coordinate_dv = round(Decimal(coord_ap_ml_dv[2]), 2))
-    if action_location not in reference.ActionLocation.proj():
-        reference.ActionLocation.insert1(action_location)
+    reference.ActionLocation.insert1(action_location, skip_duplicates=True)
 
     # -- Device
-    if {'device_name': stim_device} not in stimulation.PhotoStimDevice.proj():
-        stimulation.PhotoStimDevice.insert1({'device_name': stim_device, 'device_desc': device_desc})
+    stimulation.PhotoStimDevice.insert1({'device_name': stim_device, 'device_desc': device_desc}, skip_duplicates=True)
 
     # -- PhotoStimulationInfo
     photim_stim_info = {**action_location, **stim_info, 'device_name': stim_device}

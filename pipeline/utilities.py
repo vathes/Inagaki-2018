@@ -33,15 +33,13 @@ def find_session_matched_matfile(sess_data_dir, key):
             exp_type = re.search('regular|EPSP',
                                  ';'.join((acquisition.Session.ExperimentType & key).fetch(
                                      'experiment_type'))).group()
-            fnames = (f for f in glob.glob(os.path.join(sess_data_dir, '*.mat')))
-            for f in fnames:
+            for f in (f for f in glob.glob(os.path.join(sess_data_dir, '*.mat'))):
                 if f.find(f'{cell_id}_{exp_type}') != -1:
                     sess_data_file = f
                     break
         elif which_data == 'Probe':
-            fnames = np.hstack(glob.glob(os.path.join(dir_files[0], '*.mat'))
-                               for dir_files in os.walk(sess_data_dir) if len(dir_files[1]) == 0)
-            for f in fnames:
+            for f in np.hstack(glob.glob(os.path.join(dir_files[0], '*.mat'))
+                               for dir_files in os.walk(sess_data_dir) if len(dir_files[1]) == 0):
                 if f.find(key['session_id']) != -1:
                     sess_data_file = f
                     break

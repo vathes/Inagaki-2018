@@ -187,7 +187,7 @@ for fname in glob.glob(os.path.join(path, '*.mat')):
     # -- Device
     stimulation.PhotoStimDevice.insert1({'device_name': stim_device, 'device_desc': device_desc}, skip_duplicates=True)
 
-    # -- PhotoStimulationInfo
+    # -- PhotoStimulationProtocol
     photim_stim_info = {**action_location, **stim_info, 'device_name': stim_device}
     stimulation.PhotoStimulationInfo.insert1(photim_stim_info, skip_duplicates=True)
     # -- PhotoStimulation

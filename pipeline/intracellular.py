@@ -155,7 +155,6 @@ class TrialSegmentedMembranePotential(dj.Computed):
                                                                                  pre_stim_dur, post_stim_dur,
                                                                                  Vm_wo_spike, fs, first_time_point))
                         for trial_key in trials)
-            print(f'-> Batch Insert: {b_idx+1}/{len(trial_lists)}')
 
 
 @schema

@@ -25,18 +25,18 @@ class PhotoStimDevice(dj.Lookup):
     
 
 @schema
-class PhotoStimulationInfo(dj.Manual):
-   definition = """
-   -> reference.ActionLocation
-   -> PhotoStimDevice
-   photo_stim_excitation_lambda: decimal(6,2)    # (nm) excitation wavelength
-   ---
-   photo_stim_method = 'laser' : enum('fiber', 'laser')
-   photo_stim_duration = null:                float        # (ms), stimulus duration
-   photo_stim_shape = '':                   varchar(24)  # shape of photostim, cosine or pulsive
-   photo_stim_freq = null:                    float        # (Hz), frequency of photostimulation
-   photo_stim_notes = '':                varchar(1024)
-   """  
+class PhotoStimProtocol(dj.Manual):
+    definition = """
+    protocol: smallint
+    ---
+    -> PhotoStimDevice
+    photo_stim_excitation_lambda: decimal(6,2)    # (nm) excitation wavelength
+    photo_stim_method = 'laser' : enum('fiber', 'laser')
+    photo_stim_duration = null:                float        # (ms), stimulus duration
+    photo_stim_shape = '':                   varchar(24)  # shape of photostim, cosine or pulsive
+    photo_stim_freq = null:                    float        # (Hz), frequency of photostimulation
+    photo_stim_notes = '':                varchar(1024)
+    """
 
 
 @schema
@@ -45,7 +45,8 @@ class PhotoStimulation(dj.Manual):
     -> acquisition.Session
     photostim_datetime: datetime # the time of performing this stimulation with respect to start time of the session, in the scenario of multiple stimulations per session
     ---
-    -> PhotoStimulationInfo
+    -> reference.ActionLocation
+    -> PhotoStimProtocol
     photostim_timeseries=null: longblob  # (mW)
     photostim_start_time=null: float  # (s) first timepoint of photostim recording
     photostim_sampling_rate=null: float  # (Hz) sampling rate of photostim recording
@@ -53,8 +54,8 @@ class PhotoStimulation(dj.Manual):
 
 
 @schema
-class TrialPhotoStimInfo(dj.Imported):
-    definition = """ # information related to the stimulation settings for this trial
+class TrialPhotoStimParam(dj.Imported):
+    definition = """ # the photo stimulation parameter settings for this trial
     -> acquisition.TrialSet.Trial
     ---
     photo_stim_period: enum('sample','early delay', 'late delay','response','N/A')
