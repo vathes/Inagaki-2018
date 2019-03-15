@@ -24,7 +24,8 @@ fixed_delay_xlsx = pd.read_excel(
     index_col =0, usecols='A, P, Q, R, S', skiprows=2, nrows=20)
 fixed_delay_xlsx.columns = ['subject_id', 'genotype', 'date_of_birth', 'session_time']
 fixed_delay_xlsx['sex'] = 'Unknown'
-fixed_delay_xlsx['sess_type'] = 'fixed_delay'
+fixed_delay_xlsx['sess_type'] = 'Auditory task'
+fixed_delay_xlsx['delay_duration'] = 2
 # Random-long-delay
 random_long_delay_xlsx = pd.read_excel(
     os.path.join('.', 'data', 'SiliconProbeData', 'RandomDelayTask', 'SI_table_3_random_delay_perturb.xlsx'),
@@ -32,6 +33,7 @@ random_long_delay_xlsx = pd.read_excel(
 random_long_delay_xlsx.columns = ['subject_id', 'genotype', 'date_of_birth', 'session_time']
 random_long_delay_xlsx['sex'] = 'Unknown'
 random_long_delay_xlsx['sess_type'] = 'Auditory task'
+random_long_delay_xlsx['delay_duration'] = np.nan
 # Random-short-delay
 random_short_delay_xlsx = pd.read_excel(
     os.path.join('.', 'data', 'SiliconProbeData', 'RandomDelayTask', 'SI_table_3_random_delay_perturb.xlsx'),
@@ -39,6 +41,7 @@ random_short_delay_xlsx = pd.read_excel(
 random_short_delay_xlsx.columns = ['subject_id', 'genotype', 'date_of_birth', 'session_time']
 random_short_delay_xlsx['sex'] = 'Unknown'
 random_short_delay_xlsx['sess_type'] = 'Auditory task'
+random_short_delay_xlsx['delay_duration'] = np.nan
 # Tactile-task
 tactile_xlsx = pd.read_csv(
     os.path.join('.', 'data', 'SiliconProbeData', 'TactileTask', 'Whisker_taskTavle_for_paper.csv'),
@@ -46,8 +49,17 @@ tactile_xlsx = pd.read_csv(
 tactile_xlsx.columns = ['subject_id', 'genotype', 'date_of_birth', 'sex', 'session_time']
 tactile_xlsx = tactile_xlsx.reindex(columns=['subject_id', 'genotype', 'date_of_birth', 'session_time', 'sex'])
 tactile_xlsx['sess_type'] = 'Tactile task'
-# concat all 4
-meta_data = pd.concat([fixed_delay_xlsx, random_long_delay_xlsx, random_short_delay_xlsx, tactile_xlsx])
+tactile_xlsx['delay_duration'] = 2
+# Sound-task 1.2s
+sound12_xlsx = pd.read_csv(
+    os.path.join('.', 'data', 'SiliconProbeData', 'Sound task 1.2s', 'OppositeTask12_for_paper.csv'),
+    index_col =0, usecols= [0, 5, 6, 7, 8, 9], skiprows=1, nrows=37)
+sound12_xlsx.columns = ['subject_id', 'genotype', 'date_of_birth', 'sex', 'session_time']
+sound12_xlsx = sound12_xlsx.reindex(columns=['subject_id', 'genotype', 'date_of_birth', 'session_time', 'sex'])
+sound12_xlsx['sess_type'] = 'Auditory task'
+sound12_xlsx['delay_duration'] = 1.2
+# concat all 5
+meta_data = pd.concat([fixed_delay_xlsx, random_long_delay_xlsx, random_short_delay_xlsx, tactile_xlsx, sound12_xlsx])
 
 trial_type_and_response_dict = {1: ('lick right', 'correct'),
                                 2: ('lick left', 'correct'),
@@ -144,7 +156,7 @@ for fname in fnames:
                                                   <= tr_idx <= unit_0.Trial_info.Trial_range_to_analyze[-1])
                 trial_key['trial_type'], trial_key['trial_response'] = trial_type_and_response_dict[trial_type_of_response]
                 trial_key['delay_duration'] = (unit_0.Behavior.delay_dur[tr_idx]
-                                               if 'delay_dur' in unit_0.Behavior._fieldnames else 2)
+                                               if 'delay_dur' in unit_0.Behavior._fieldnames else this_sess.delay_duration)
                 acquisition.TrialSet.Trial.insert1(trial_key, ignore_extra_fields = True, skip_duplicates = True,
                                                    allow_direct_insert = True)
 
