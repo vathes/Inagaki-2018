@@ -19,16 +19,25 @@ from pynwb import NWBFile, NWBHDF5IO
 warnings.filterwarnings('ignore', module='pynwb')
 # =============================================
 # Each NWBFile represent a session, thus for every session in acquisition.Session, we build one NWBFile
+overwrite = False
+save_path = os.path.join('data', 'NWB 2.0')
+if not os.path.exists(save_path):
+    os.makedirs(save_path)
 
 for session_key in tqdm.tqdm(acquisition.Session.fetch('KEY')):
     this_session = (acquisition.Session & session_key).fetch1()
+    # Overwrite?
+    identifier = '_'.join([this_session['subject_id'],
+                           this_session['session_time'].strftime('%Y-%m-%d'),
+                           this_session['session_id']])
+    save_file_name = ''.join([identifier, '.nwb'])
+    if not overwrite and os.path.exists(os.path.join(save_path, save_file_name)):
+        continue
     # =============== General ====================
     # -- NWB file - a NWB2.0 file for each session
     nwbfile = NWBFile(
         session_description=this_session['session_note'],
-        identifier='_'.join([this_session['subject_id'],
-                             this_session['session_time'].strftime('%Y-%m-%d'),
-                             this_session['session_id']]),
+        identifier=identifier,
         session_start_time=this_session['session_time'],
         file_create_date=datetime.now(tzlocal()),
         experimenter='; '.join((acquisition.Session.Experimenter & session_key).fetch('experimenter')),
@@ -231,11 +240,7 @@ for session_key in tqdm.tqdm(acquisition.Session.fetch('KEY')):
             nwbfile.add_trial(**trial_tag_value)
 
     # =============== Write NWB 2.0 file ===============
-    save_path = os.path.join('data', 'NWB 2.0')
-    save_file_name = ''.join([nwbfile.identifier, '.nwb'])
-    if not os.path.exists(save_path):
-        os.makedirs(save_path)
     with NWBHDF5IO(os.path.join(save_path, save_file_name), mode = 'w') as io:
         io.write(nwbfile)
         print(f'Write NWB 2.0 file: {save_file_name}')
-        
+

@@ -139,6 +139,9 @@ for fname in fnames:
             # handle different fieldnames "Sampling_start" vs "Sample_start"
             if 'Sample_start' not in unit_0.Behavior._fieldnames and 'Sampling_start' in unit_0.Behavior._fieldnames:
                 unit_0.Behavior.Sample_start = unit_0.Behavior.Sampling_start
+            if unit_0.Behavior.stim_trial_vector.size == 0:
+                unit_0.Behavior.stim_trial_vector = [True if re.search('_s_', str(type)) else False
+                                                     for type in unit_0.Trial_info.Trial_types ]
 
             print('\nInsert trial information')
             acquisition.TrialSet.insert1(trial_key, allow_direct_insert=True, ignore_extra_fields = True)
