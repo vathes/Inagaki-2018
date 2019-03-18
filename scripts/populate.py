@@ -1,10 +1,12 @@
 from pipeline import (reference, subject, acquisition, stimulation, analysis,
                       intracellular, extracellular, behavior, utilities)
 
-prioritized_sessions = [{'session_id': 'Whole_cell_96_regular'},
-                        {'session_id': 'Whole_cell_96_EPSP'},
-                        {'session_id': 'HI127_031617'},
-                        {'session_id': 'HI152_060218'}]
+# prioritized_sessions = [{'session_id': 'Whole_cell_96_regular'},
+#                         {'session_id': 'Whole_cell_96_EPSP'},
+#                         {'session_id': 'HI127_031617'},
+#                         {'session_id': 'HI152_060218'}]
+
+prioritized_sessions = acquisition.Session()
 
 # ====================== Starting import and compute procedure ======================
 print('======== Populate() Intracellular Routine =====')

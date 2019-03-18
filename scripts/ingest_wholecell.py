@@ -163,12 +163,17 @@ for fname in glob.glob(os.path.join(path, '*.mat')):
     stim_device = 'laser'  # hard-coded here..., could not find a more specific name from metadata
     device_desc = 'laser (Laser Quantum) were controlled by an acousto-optical modulator (AOM; Quanta Tech) and a shutter (Vincent Associates)'
 
-    stim_info = dict(photo_stim_excitation_lambda=473,
-                     photo_stim_notes='photostimulate four spots in each hemisphere, centered on ALM (AP 2.5 mm; ML 1.5 mm) with 1 mm spacing (in total eight spots bilaterally) using scanning Galvo mirrors',
-                     photo_stim_duration=1000,
-                     photo_stim_freq=40,
-                     photo_stim_shape='sinusoidal',
-                     photo_stim_method='laser')
+    # -- Device
+    stimulation.PhotoStimDevice.insert1({'device_name': stim_device, 'device_desc': device_desc}, skip_duplicates=True)
+
+    photim_stim_protocol = dict(protocol=1,
+                                device_name=stim_device,
+                                photo_stim_excitation_lambda=473,
+                                photo_stim_notes='photostimulate four spots in each hemisphere, centered on ALM (AP 2.5 mm; ML 1.5 mm) with 1 mm spacing (in total eight spots bilaterally) using scanning Galvo mirrors',
+                                photo_stim_duration=1000,
+                                photo_stim_freq=40,
+                                photo_stim_shape='sinusoidal',
+                                photo_stim_method='laser')
 
     # -- BrainLocation
     brain_location = {'brain_region': brain_region,
@@ -184,17 +189,14 @@ for fname in glob.glob(os.path.join(path, '*.mat')):
                            coordinate_dv = round(Decimal(coord_ap_ml_dv[2]), 2))
     reference.ActionLocation.insert1(action_location, skip_duplicates=True)
 
-    # -- Device
-    stimulation.PhotoStimDevice.insert1({'device_name': stim_device, 'device_desc': device_desc}, skip_duplicates=True)
-
     # -- PhotoStimulationProtocol
-    photim_stim_info = {**action_location, **stim_info, 'device_name': stim_device}
-    stimulation.PhotoStimulationInfo.insert1(photim_stim_info, skip_duplicates=True)
+    stimulation.PhotoStimProtocol.insert1(photim_stim_protocol, skip_duplicates=True)
     # -- PhotoStimulation
     # only 1 photostim per session, perform at the same time with session
-    photo_stimulation = dict({**session_info, **photim_stim_info}, photostim_datetime=session_info['session_time'])
+    photo_stimulation = dict({**session_info, **photim_stim_protocol}, photostim_datetime=session_info['session_time'])
     if photo_stimulation not in stimulation.PhotoStimulation.proj():
         stimulation.PhotoStimulation.insert1({**photo_stimulation,
+                                              **action_location,
                                               **(dict(photostim_start_time=0,
                                                       photostim_timeseries=mat_data.recording_data.AOM,
                                                       photostim_sampling_rate=mat_data.recording_data.sample_rate)

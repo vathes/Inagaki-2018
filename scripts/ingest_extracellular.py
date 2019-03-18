@@ -136,7 +136,8 @@ for fname in fnames:
     with acquisition.TrialSet.connection.transaction:
         if trial_key not in acquisition.TrialSet.proj():
             fs = unit_0.Meta_data.parameters.Sample_Rate
-            if mat_trial_info is not None:  # handle different fieldnames "Sampling_start" vs "Sample_start" in tactile_task dataset
+            # handle different fieldnames "Sampling_start" vs "Sample_start"
+            if 'Sample_start' not in unit_0.Behavior._fieldnames and 'Sampling_start' in unit_0.Behavior._fieldnames:
                 unit_0.Behavior.Sample_start = unit_0.Behavior.Sampling_start
 
             print('\nInsert trial information')
@@ -213,12 +214,17 @@ for fname in fnames:
     stim_device = 'laser'  # hard-coded here..., could not find a more specific name from metadata
     device_desc = 'laser (Laser Quantum) were controlled by an acousto-optical modulator (AOM; Quanta Tech) and a shutter (Vincent Associates)'
 
-    stim_info = dict(photo_stim_excitation_lambda=473,
-                     photo_stim_notes='photostimulate four spots in each hemisphere, centered on ALM (AP 2.5 mm; ML 1.5 mm) with 1 mm spacing (in total eight spots bilaterally) using scanning Galvo mirrors',
-                     photo_stim_duration=1000,
-                     photo_stim_freq=40,
-                     photo_stim_shape='sinusoidal',
-                     photo_stim_method='laser')
+    # -- Device
+    stimulation.PhotoStimDevice.insert1({'device_name': stim_device, 'device_desc': device_desc}, skip_duplicates=True)
+
+    photim_stim_protocol = dict(protocol=1,
+                                device_name = stim_device,
+                                photo_stim_excitation_lambda=473,
+                                photo_stim_notes='photostimulate four spots in each hemisphere, centered on ALM (AP 2.5 mm; ML 1.5 mm) with 1 mm spacing (in total eight spots bilaterally) using scanning Galvo mirrors',
+                                photo_stim_duration=1000,
+                                photo_stim_freq=40,
+                                photo_stim_shape='sinusoidal',
+                                photo_stim_method='laser')
 
     # -- BrainLocation
     brain_location = {'brain_region': brain_region,
@@ -234,17 +240,12 @@ for fname in fnames:
                            coordinate_dv = round(Decimal(coord_ap_ml_dv[2]), 2))
     reference.ActionLocation.insert1(action_location, skip_duplicates=True)
 
-    # -- Device
-    stimulation.PhotoStimDevice.insert1({'device_name': stim_device, 'device_desc': device_desc}, skip_duplicates=True)
-
-    # -- PhotoStimulationInfo
-    photim_stim_info = {**action_location, **stim_info, 'device_name': stim_device}
-    if photim_stim_info not in stimulation.PhotoStimulationInfo.proj():
-        stimulation.PhotoStimulationInfo.insert1(photim_stim_info)
+    # -- PhotoStimulationProtocol
+    stimulation.PhotoStimProtocol.insert1(photim_stim_protocol, skip_duplicates=True)
     # -- PhotoStimulation
     # only 1 photostim per session, perform at the same time with session
     if dict(session_info, photostim_datetime=session_info['session_time']) not in stimulation.PhotoStimulation.proj():
-        stimulation.PhotoStimulation.insert1(dict({**session_info, **photim_stim_info},
+        stimulation.PhotoStimulation.insert1(dict({**session_info, **action_location, **photim_stim_protocol},
                                                   photostim_datetime=session_info['session_time'])
                                              , ignore_extra_fields=True)
 
