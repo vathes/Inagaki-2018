@@ -17,22 +17,21 @@ import pynwb
 from pynwb import NWBFile, NWBHDF5IO
 
 warnings.filterwarnings('ignore', module='pynwb')
-# =============================================
-# Each NWBFile represent a session, thus for every session in acquisition.Session, we build one NWBFile
-overwrite = False
-save_path = os.path.join('data', 'NWB 2.0')
-if not os.path.exists(save_path):
-    os.makedirs(save_path)
 
-for session_key in tqdm.tqdm(acquisition.Session.fetch('KEY')):
+# ============================== SET CONSTANTS ==========================================
+# Each NWBFile represent a session, thus for every session in acquisition.Session, we build one NWBFile
+default_nwb_output_dir = os.path.join('data', 'NWB 2.0')
+institution = 'Janelia Research Campus'
+hardware_filter = 'Bandpass filtered 300-6K Hz'
+
+
+def export_to_nwb(session_key, nwb_output_dir=default_nwb_output_dir, save=False, overwrite=True):
     this_session = (acquisition.Session & session_key).fetch1()
-    # Overwrite?
+
     identifier = '_'.join([this_session['subject_id'],
                            this_session['session_time'].strftime('%Y-%m-%d'),
                            this_session['session_id']])
-    save_file_name = ''.join([identifier, '.nwb'])
-    if not overwrite and os.path.exists(os.path.join(save_path, save_file_name)):
-        continue
+
     # =============== General ====================
     # -- NWB file - a NWB2.0 file for each session
     nwbfile = NWBFile(
@@ -41,8 +40,8 @@ for session_key in tqdm.tqdm(acquisition.Session.fetch('KEY')):
         session_start_time=this_session['session_time'],
         file_create_date=datetime.now(tzlocal()),
         experimenter='; '.join((acquisition.Session.Experimenter & session_key).fetch('experimenter')),
-        institution='Janelia Research Campus',  # TODO: not in pipeline
-        related_publications='')  # TODO: not in pipeline
+        institution=institution,
+        related_publications='')
     # -- subject
     subj = (subject.Subject & session_key).fetch1()
     nwbfile.subject = pynwb.file.Subject(
@@ -62,7 +61,7 @@ for session_key in tqdm.tqdm(acquisition.Session.fetch('KEY')):
             name=cell['cell_id'],
             device=whole_cell_device,
             description='N/A',
-            filtering='N/A',  # TODO: not in pipeline
+            filtering='N/A',
             location='; '.join([f'{k}: {str(v)}'
                                 for k, v in dict((reference.BrainLocation & cell).fetch1(),
                                                  depth=cell['cell_depth']).items()]))
@@ -72,9 +71,9 @@ for session_key in tqdm.tqdm(acquisition.Session.fetch('KEY')):
             'membrane_potential_start_time', 'membrane_potential_sampling_rate')
         nwbfile.add_acquisition(pynwb.icephys.PatchClampSeries(name='membrane_potential',
                                                                electrode=ic_electrode,
-                                                               unit='mV',  # TODO: not in pipeline
+                                                               unit='mV',
                                                                conversion=1e-3,
-                                                               gain=1.0,  # TODO: not in pipeline
+                                                               gain=1.0,
                                                                data=mp,
                                                                starting_time=mp_start_time,
                                                                rate=mp_fs))
@@ -119,8 +118,8 @@ for session_key in tqdm.tqdm(acquisition.Session.fetch('KEY')):
         for chn in (reference.Probe.Channel & probe_insertion).fetch(as_dict=True):
             nwbfile.add_electrode(id=chn['channel_id'],
                                   group=electrode_group,
-                                  filtering='',  # TODO: not in pipeline
-                                  imp=-1.,  # TODO: not in pipeline
+                                  filtering=hardware_filter,
+                                  imp=-1.,
                                   x=0.0,  # not available from data
                                   y=0.0,  # not available from data
                                   z=0.0,  # not available from data
@@ -151,7 +150,7 @@ for session_key in tqdm.tqdm(acquisition.Session.fetch('KEY')):
                  & session_key & trial_seg_setting)
 
     if seg_behav_query:
-        behav_acq = pynwb.behavior.BehavioralTimeSeries(name = 'lick_times')
+        behav_acq = pynwb.behavior.BehavioralTimeSeries(name='lick_times')
         nwbfile.add_acquisition(behav_acq)
         seg_behav = pd.DataFrame(seg_behav_query.fetch('start_time', 'realigned_event_time',
                                                        'segmented_lick_left_on',
@@ -164,11 +163,11 @@ for session_key in tqdm.tqdm(acquisition.Session.fetch('KEY')):
             lick_times = np.hstack(r['segmented_'+behav_name] - r.realigned_event_time + r.start_time
                                  for _, r in seg_behav.iterrows())
             behav_acq.create_timeseries(
-                name = behav_name,
-                unit = 'a.u.',
-                conversion = 1.0,
-                data = np.full_like(lick_times, 1),
-                timestamps = lick_times)
+                name=behav_name,
+                unit='a.u.',
+                conversion=1.0,
+                data=np.full_like(lick_times, 1),
+                timestamps=lick_times)
 
     # =============== Photostimulation ====================
     photostim = ((stimulation.PhotoStimulation & session_key).fetch1()
@@ -240,7 +239,26 @@ for session_key in tqdm.tqdm(acquisition.Session.fetch('KEY')):
             nwbfile.add_trial(**trial_tag_value)
 
     # =============== Write NWB 2.0 file ===============
-    with NWBHDF5IO(os.path.join(save_path, save_file_name), mode = 'w') as io:
-        io.write(nwbfile)
-        print(f'Write NWB 2.0 file: {save_file_name}')
+    if save:
+        save_file_name = ''.join([nwbfile.identifier, '.nwb'])
+        if not os.path.exists(nwb_output_dir):
+            os.makedirs(nwb_output_dir)
+        if not overwrite and os.path.exists(os.path.join(nwb_output_dir, save_file_name)):
+            return nwbfile
+        with NWBHDF5IO(os.path.join(nwb_output_dir, save_file_name), mode = 'w') as io:
+            io.write(nwbfile)
+            print(f'Write NWB 2.0 file: {save_file_name}')
 
+    return nwbfile
+
+
+# ============================== EXPORT ALL ==========================================
+
+if __name__ == '__main__':
+    if len(sys.argv) > 1:
+        nwb_outdir = sys.argv[1]
+    else:
+        nwb_outdir = default_nwb_output_dir
+
+    for skey in acquisition.Session.fetch('KEY'):
+        export_to_nwb(skey, nwb_output_dir=nwb_outdir, save=True)
