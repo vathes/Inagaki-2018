@@ -11,8 +11,10 @@ import scipy.io as sio
 import datajoint as dj
 
 from . import reference, utilities, acquisition, analysis
+from . import intracellular_path
 
 schema = dj.schema(dj.config.get('database.prefix', '') + 'intracellular')
+sess_data_dir = os.path.join(intracellular_path, 'Data')
 
 
 @schema
@@ -41,7 +43,6 @@ class MembranePotential(dj.Imported):
 
     def make(self, key):
         # ============ Dataset ============
-        sess_data_dir = os.path.join('.', 'data', 'WholeCellData', 'Data')
         # Get the Session definition from the keys of this session
         sess_data_file = utilities.find_session_matched_matfile(sess_data_dir, key)
         if sess_data_file is None:
@@ -76,7 +77,6 @@ class CurrentInjection(dj.Imported):
 
     def make(self, key):
         # ============ Dataset ============
-        sess_data_dir = os.path.join('.', 'data', 'WholeCellData', 'Data')
         # Get the Session definition from the keys of this session
         sess_data_file = utilities.find_session_matched_matfile(sess_data_dir, key)
         if sess_data_file is None:
@@ -104,7 +104,6 @@ class CellSpikeTimes(dj.Imported):
 
     def make(self, key):
         # ============ Dataset ============
-        sess_data_dir = os.path.join('.', 'data', 'WholeCellData', 'Data')
         # Get the Session definition from the keys of this session
         sess_data_file = utilities.find_session_matched_matfile(sess_data_dir, key)
         if sess_data_file is None:

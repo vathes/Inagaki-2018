@@ -7,21 +7,22 @@ from pipeline import (reference, subject, acquisition, stimulation, analysis,
 #                         {'session_id': 'HI152_060218'}]
 
 prioritized_sessions = acquisition.Session()
+settings = dict(reserve_jobs=True, suppress_errors=True)
 
 # ====================== Starting import and compute procedure ======================
 print('======== Populate() Intracellular Routine =====')
-intracellular.MembranePotential.populate(prioritized_sessions, reserve_jobs=True, suppress_errors=True)
-intracellular.CurrentInjection.populate(prioritized_sessions, reserve_jobs=True, suppress_errors=True)
-intracellular.CellSpikeTimes.populate(prioritized_sessions, reserve_jobs=True, suppress_errors=True)
+intracellular.MembranePotential.populate(prioritized_sessions, **settings)
+intracellular.CurrentInjection.populate(prioritized_sessions, **settings)
+intracellular.CellSpikeTimes.populate(prioritized_sessions, **settings)
 
-intracellular.TrialSegmentedMembranePotential.populate(prioritized_sessions, reserve_jobs=True, suppress_errors=True)
-intracellular.TrialSegmentedCurrentInjection.populate(prioritized_sessions, reserve_jobs=True, suppress_errors=True)
-intracellular.TrialSegmentedCellSpikeTimes.populate(prioritized_sessions, reserve_jobs=True, suppress_errors=True)
+intracellular.TrialSegmentedMembranePotential.populate(prioritized_sessions, **settings)
+intracellular.TrialSegmentedCurrentInjection.populate(prioritized_sessions, **settings)
+intracellular.TrialSegmentedCellSpikeTimes.populate(prioritized_sessions, **settings)
 
-behavior.TrialSegmentedLickTrace.populate(prioritized_sessions, reserve_jobs=True, suppress_errors=True)
+behavior.TrialSegmentedLickTrace.populate(prioritized_sessions, **settings)
 
 print('======== Populate() Extracellular Routine =====')
-analysis.RealignedEvent.populate(reserve_jobs=True, suppress_errors=True)
-extracellular.UnitSpikeTimes.populate(prioritized_sessions, reserve_jobs=True, suppress_errors=True)
-extracellular.TrialSegmentedUnitSpikeTimes.populate(prioritized_sessions, reserve_jobs=True, suppress_errors=True)
+analysis.RealignedEvent.populate(**settings)
+extracellular.UnitSpikeTimes.populate(prioritized_sessions, **settings)
+extracellular.TrialSegmentedUnitSpikeTimes.populate(prioritized_sessions, **settings)
 

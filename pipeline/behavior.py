@@ -12,9 +12,10 @@ import datajoint as dj
 import h5py as h5
 
 from . import utilities, acquisition, analysis, intracellular
-
+from . import intracellular_path
 
 schema = dj.schema(dj.config.get('database.prefix', '') + 'behavior')
+sess_data_dir = os.path.join(intracellular_path, 'Data')
 
 
 @schema
@@ -35,7 +36,6 @@ class TrialSegmentedLickTrace(dj.Imported):
 
     def make(self, key):
         # ============ Dataset ============
-        sess_data_dir = os.path.join('.', 'data', 'WholeCellData', 'Data')
         # Get the Session definition from the keys of this session
         sess_data_file = utilities.find_session_matched_matfile(
             sess_data_dir, dict(key, cell_id=(intracellular.Cell & key).fetch1('cell_id')))

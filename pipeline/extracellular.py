@@ -12,8 +12,10 @@ import datajoint as dj
 import tqdm
 
 from . import reference, utilities, acquisition, analysis
+from . import extracellular_path
 
 schema = dj.schema(dj.config.get('database.prefix', '') + 'extracellular')
+sess_data_dir = extracellular_path
 
 
 @schema
@@ -55,7 +57,6 @@ class UnitSpikeTimes(dj.Imported):
     """
 
     def make(self, key):
-        sess_data_dir = os.path.join('.', 'data', 'SiliconProbeData')
         sess_data_file = utilities.find_session_matched_matfile(sess_data_dir, key)
 
         if sess_data_file is None:
@@ -87,7 +88,6 @@ class TrialSegmentedUnitSpikeTimes(dj.Imported):
 
     def make(self, key):
         # get data
-        sess_data_dir = os.path.join('.', 'data', 'SiliconProbeData')
         sess_data_file = utilities.find_session_matched_matfile(sess_data_dir, key)
 
         if sess_data_file is None:
