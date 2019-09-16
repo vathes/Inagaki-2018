@@ -62,13 +62,13 @@ class TrialSet(dj.Imported):
         -> master
         trial_id: smallint           # id of this trial in this trial set
         ---
-        start_time = null: float               # start time of this trial, with respect to starting point of this session
-        stop_time = null: float                # end time of this trial, with respect to starting point of this session
+        start_time=null: float               # start time of this trial, with respect to starting point of this session
+        stop_time=null: float                # end time of this trial, with respect to starting point of this session
         -> reference.TrialType
         -> reference.TrialResponse
         trial_stim_present: bool  # is this a stim or no-stim trial
         trial_is_good: bool  # good/bad status of trial (bad trials are not analyzed)
-        delay_duration: decimal(6,2)  # (s) duration of the delay period
+        delay_duration=null: decimal(6,2)  # (s) duration of the delay period
         """
         
     class EventTime(dj.Part):

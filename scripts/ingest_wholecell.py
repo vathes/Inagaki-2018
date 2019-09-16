@@ -15,12 +15,11 @@ import glob
 
 from pipeline import (reference, subject, acquisition, stimulation, analysis,
                       intracellular, extracellular, behavior, utilities)
+from pipeline import intracellular_path as path
 
 # ================== Dataset ==================
-path = os.path.join('.', 'data', 'WholeCellData', 'Data')
-
 xlsname = 'SI_table_1_wc_cell_list.xlsx'
-meta_data = pd.read_excel(os.path.join('.', 'data', 'WholeCellData', xlsname),
+meta_data = pd.read_excel(os.path.join(path, xlsname),
                           index_col =0,
                           usecols='A:N',
                           skiprows=[1],
@@ -46,7 +45,7 @@ trial_type_and_response_dict = {1: ('lick right', 'correct'),
 
 # ========================== METADATA ==========================
 # ==================== subject ====================
-for fname in glob.glob(os.path.join(path, '*.mat')):
+for fname in glob.glob(os.path.join(path, 'Data', '*.mat')):
     mat_data = sio.loadmat(fname, struct_as_record = False, squeeze_me = True)['wholeCell']
     fname = (os.path.split(fname)[-1]).replace('.mat', '')
     this_sess = meta_data.loc[f'Cell {mat_data.cell_id}']

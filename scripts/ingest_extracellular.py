@@ -10,17 +10,17 @@ import scipy.io as sio
 import pandas as pd
 from tqdm import tqdm
 import glob
+from decimal import Decimal
 import datajoint as dj
 
 from pipeline import (reference, subject, acquisition, stimulation, analysis,
                       intracellular, extracellular, behavior, utilities)
+from pipeline import extracellular_path as path
 
 # ================== Dataset ==================
-path = os.path.join('.', 'data', 'SiliconProbeData')
-
 # Fixex-delay
 fixed_delay_xlsx = pd.read_excel(
-    os.path.join('.', 'data', 'SiliconProbeData', 'FixedDelayTask', 'SI_table_2_bilateral_perturb.xlsx'),
+    os.path.join(path, 'FixedDelayTask', 'SI_table_2_bilateral_perturb.xlsx'),
     index_col =0, usecols='A, P, Q, R, S', skiprows=2, nrows=20)
 fixed_delay_xlsx.columns = ['subject_id', 'genotype', 'date_of_birth', 'session_time']
 fixed_delay_xlsx['sex'] = 'Unknown'
@@ -28,7 +28,7 @@ fixed_delay_xlsx['sess_type'] = 'Auditory task'
 fixed_delay_xlsx['delay_duration'] = 2
 # Random-long-delay
 random_long_delay_xlsx = pd.read_excel(
-    os.path.join('.', 'data', 'SiliconProbeData', 'RandomDelayTask', 'SI_table_3_random_delay_perturb.xlsx'),
+    os.path.join(path, 'RandomDelayTask', 'SI_table_3_random_delay_perturb.xlsx'),
     index_col =0, usecols='A, P, Q, R, S', skiprows=5, nrows=23)
 random_long_delay_xlsx.columns = ['subject_id', 'genotype', 'date_of_birth', 'session_time']
 random_long_delay_xlsx['sex'] = 'Unknown'
@@ -36,7 +36,7 @@ random_long_delay_xlsx['sess_type'] = 'Auditory task'
 random_long_delay_xlsx['delay_duration'] = np.nan
 # Random-short-delay
 random_short_delay_xlsx = pd.read_excel(
-    os.path.join('.', 'data', 'SiliconProbeData', 'RandomDelayTask', 'SI_table_3_random_delay_perturb.xlsx'),
+    os.path.join(path, 'RandomDelayTask', 'SI_table_3_random_delay_perturb.xlsx'),
     index_col =0, usecols='A, F, G, H, I', skiprows=42, nrows=11)
 random_short_delay_xlsx.columns = ['subject_id', 'genotype', 'date_of_birth', 'session_time']
 random_short_delay_xlsx['sex'] = 'Unknown'
@@ -44,15 +44,15 @@ random_short_delay_xlsx['sess_type'] = 'Auditory task'
 random_short_delay_xlsx['delay_duration'] = np.nan
 # Tactile-task
 tactile_xlsx = pd.read_csv(
-    os.path.join('.', 'data', 'SiliconProbeData', 'TactileTask', 'Whisker_taskTavle_for_paper.csv'),
+    os.path.join(path, 'TactileTask', 'Whisker_taskTavle_for_paper.csv'),
     index_col =0, usecols= [0, 5, 6, 7, 8, 9], skiprows=1, nrows=30)
 tactile_xlsx.columns = ['subject_id', 'genotype', 'date_of_birth', 'sex', 'session_time']
 tactile_xlsx = tactile_xlsx.reindex(columns=['subject_id', 'genotype', 'date_of_birth', 'session_time', 'sex'])
 tactile_xlsx['sess_type'] = 'Tactile task'
-tactile_xlsx['delay_duration'] = 2
+tactile_xlsx['delay_duration'] = 1.2
 # Sound-task 1.2s
 sound12_xlsx = pd.read_csv(
-    os.path.join('.', 'data', 'SiliconProbeData', 'Sound task 1.2s', 'OppositeTask12_for_paper.csv'),
+    os.path.join(path, 'Sound task 1.2s', 'OppositeTask12_for_paper.csv'),
     index_col =0, usecols= [0, 5, 6, 7, 8, 9], skiprows=1, nrows=37)
 sound12_xlsx.columns = ['subject_id', 'genotype', 'date_of_birth', 'sex', 'session_time']
 sound12_xlsx = sound12_xlsx.reindex(columns=['subject_id', 'genotype', 'date_of_birth', 'session_time', 'sex'])
@@ -79,7 +79,7 @@ fnames = np.hstack(glob.glob(os.path.join(dir_files[0], '*.mat'))
                    for dir_files in os.walk(path) if len(dir_files[1]) == 0)
 
 for fname in fnames:
-    mat = sio.loadmat(fname, struct_as_record = False, squeeze_me = True)
+    mat = sio.loadmat(fname, struct_as_record=False, squeeze_me=True)
     mat_units = mat['unit']
     mat_trial_info = mat.get('trial_info')
     this_sess = meta_data.loc[re.sub('_units.mat|_JRC_units', '', os.path.split(fname)[-1])]
@@ -98,7 +98,7 @@ for fname in fnames:
     with subject.Subject.connection.transaction:
         if subject_info not in subject.Subject.proj():
             subject.Subject.insert1(subject_info, ignore_extra_fields=True)
-            subject.Subject.Allele.insert((dict(subject_info, allele = k)
+            subject.Subject.Allele.insert((dict(subject_info, allele=k)
                                            for k in alleles), ignore_extra_fields = True)
 
     # ==================== session ====================
@@ -139,6 +139,11 @@ for fname in fnames:
             # handle different fieldnames "Sampling_start" vs "Sample_start"
             if 'Sample_start' not in unit_0.Behavior._fieldnames and 'Sampling_start' in unit_0.Behavior._fieldnames:
                 unit_0.Behavior.Sample_start = unit_0.Behavior.Sampling_start
+            if unit_0.Behavior.stim_trial_vector.size == 0:
+                unit_0.Behavior.stim_trial_vector = [True if re.search('_s_', str(tr_type)) else False
+                                                     for tr_type in unit_0.Trial_info.Trial_types]
+            # compute delay_duration
+            delay_dur = np.nanmedian(unit_0.Behavior.Cue_start - unit_0.Behavior.Delay_start)
 
             print('\nInsert trial information')
             acquisition.TrialSet.insert1(trial_key, allow_direct_insert=True, ignore_extra_fields = True)
@@ -156,8 +161,7 @@ for fname in fnames:
                 trial_key['trial_is_good'] = bool(unit_0.Trial_info.Trial_range_to_analyze[0]
                                                   <= tr_idx <= unit_0.Trial_info.Trial_range_to_analyze[-1])
                 trial_key['trial_type'], trial_key['trial_response'] = trial_type_and_response_dict[trial_type_of_response]
-                trial_key['delay_duration'] = (unit_0.Behavior.delay_dur[tr_idx]
-                                               if 'delay_dur' in unit_0.Behavior._fieldnames else this_sess.delay_duration)
+                trial_key['delay_duration'] = Decimal(cue_start - delay_start).quantize(Decimal('0.1'))
                 acquisition.TrialSet.Trial.insert1(trial_key, ignore_extra_fields = True, skip_duplicates = True,
                                                    allow_direct_insert = True)
 
