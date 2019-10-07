@@ -155,15 +155,15 @@ for fname in fnames:
                               unit_0.Behavior.Delay_start, unit_0.Behavior.Sample_start))):
 
                 trial_key['trial_id'] = tr_idx + 1  # trial-number starts from 1
-                trial_key['start_time'] = mat_trial_info[tr_idx].onset / fs if mat_trial_info is not None else None  # hard-coded here, no trial-start times found in data for 1st paper
+                trial_key['start_time'] = mat_trial_info[tr_idx].onset / fs if mat_trial_info is not None else None  # hard-coded here, no trial-start times found in data for 2018 paper
                 trial_key['stop_time'] = mat_trial_info[tr_idx].offset / fs if mat_trial_info is not None else None  # hard-coded here, no trial-end times found in data
                 trial_key['trial_stim_present'] = bool(stim_trial != 0)
                 trial_key['trial_is_good'] = bool(unit_0.Trial_info.Trial_range_to_analyze[0]
                                                   <= tr_idx <= unit_0.Trial_info.Trial_range_to_analyze[-1])
                 trial_key['trial_type'], trial_key['trial_response'] = trial_type_and_response_dict[trial_type_of_response]
                 trial_key['delay_duration'] = Decimal(cue_start - delay_start).quantize(Decimal('0.1'))
-                acquisition.TrialSet.Trial.insert1(trial_key, ignore_extra_fields = True, skip_duplicates = True,
-                                                   allow_direct_insert = True)
+                acquisition.TrialSet.Trial.insert1(trial_key, ignore_extra_fields=True, skip_duplicates=True,
+                                                   allow_direct_insert=True)
 
                 # ======== Now add trial event timing to the EventTime part table ====
                 events_time = dict(trial_start=0,

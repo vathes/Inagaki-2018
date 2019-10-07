@@ -52,7 +52,7 @@ class UnitSpikeTimes(dj.Imported):
     spike_times: longblob  # (s) time of each spike, with respect to the start of session 
     unit_cell_type='N/A': varchar(32)  # e.g. cell-type of this unit (e.g. wide width, narrow width spiking)
     unit_spike_width: float  # (ms) spike width of this unit, from bottom peak to next positive peak or time point spike terminates
-    unit_depth: float  # (mm)
+    unit_depth: float  # (um)
     spike_waveform: longblob  # waveform(s) of each spike at each spike time (spike_time x waveform_timestamps)
     """
 
@@ -62,15 +62,15 @@ class UnitSpikeTimes(dj.Imported):
         if sess_data_file is None:
             raise FileNotFoundError(f'Extracellular import failed: ({key["subject_id"]} - {key["session_time"]})')
 
-        mat_units = sio.loadmat(sess_data_file, struct_as_record = False, squeeze_me = True)['unit']
+        mat_units = sio.loadmat(sess_data_file, struct_as_record=False, squeeze_me=True)['unit']
         for unit_idx, unit in tqdm.tqdm(enumerate(mat_units)):
             unit_key = dict(key,
-                            unit_id = unit_idx,
-                            channel_id = unit.channel,
-                            unit_spike_width = unit.SpikeWidth,
-                            unit_depth = unit.Depth,
-                            spike_times = unit.SpikeTimes,
-                            spike_waveform = unit.Spike_shpe_info.SpikeShape)
+                            unit_id=unit_idx,
+                            channel_id=unit.channel,
+                            unit_spike_width=unit.SpikeWidth,
+                            unit_depth=unit.Depth,
+                            spike_times=unit.SpikeTimes,
+                            spike_waveform=unit.Spike_shpe_info.SpikeShape)
             self.insert1(unit_key, allow_direct_insert = True)
 
 
