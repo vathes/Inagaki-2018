@@ -76,7 +76,7 @@ class TrialSet(dj.Imported):
         -> master.Trial
         -> reference.ExperimentalEvent.proj(trial_event="event")
         ---
-        event_time = null: float   # (in second) event time with respect to this session's start time
+        event_time = null: float   # (in second) event time with respect to this trial's start time
         """
 
     def make(self, key):
