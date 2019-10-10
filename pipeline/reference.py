@@ -3,7 +3,7 @@ Schema of subject information.
 '''
 import datajoint as dj
 
-schema = dj.schema(dj.config.get('database.prefix', '') + 'reference')
+schema = dj.schema(dj.config['custom'].get('database.prefix', '') + 'reference')
 
 
 @schema

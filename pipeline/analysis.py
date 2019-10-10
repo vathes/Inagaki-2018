@@ -13,7 +13,7 @@ import h5py as h5
 
 from . import reference, utilities, acquisition
 
-schema = dj.schema(dj.config.get('database.prefix', '') + 'analysis')
+schema = dj.schema(dj.config['custom'].get('database.prefix', '') + 'analysis')
 
 
 @schema

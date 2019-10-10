@@ -13,7 +13,7 @@ import datajoint as dj
 from . import reference, utilities, acquisition, analysis
 from . import intracellular_path
 
-schema = dj.schema(dj.config.get('database.prefix', '') + 'intracellular')
+schema = dj.schema(dj.config['custom'].get('database.prefix', '') + 'intracellular')
 sess_data_dir = os.path.join(intracellular_path, 'Data')
 
 
