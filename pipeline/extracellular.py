@@ -14,7 +14,7 @@ import tqdm
 from . import reference, utilities, acquisition, analysis
 from . import extracellular_path
 
-schema = dj.schema(dj.config.get('database.prefix', '') + 'extracellular')
+schema = dj.schema(dj.config['custom'].get('database.prefix', '') + 'extracellular')
 sess_data_dir = extracellular_path
 
 

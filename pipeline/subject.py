@@ -4,7 +4,7 @@ Schema of subject information.
 import datajoint as dj
 from . import reference
 
-schema = dj.schema(dj.config.get('database.prefix', '') + 'subject')
+schema = dj.schema(dj.config['custom'].get('database.prefix', '') + 'subject')
 
 
 @schema

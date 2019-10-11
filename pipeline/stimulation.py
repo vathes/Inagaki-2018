@@ -12,7 +12,7 @@ import h5py as h5
 
 from . import reference, subject, utilities, stimulation, acquisition, analysis
 
-schema = dj.schema(dj.config.get('database.prefix', '') + 'stimulation')
+schema = dj.schema(dj.config['custom'].get('database.prefix', '') + 'stimulation')
 
 
 @schema

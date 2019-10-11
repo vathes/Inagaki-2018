@@ -4,7 +4,7 @@ Schema of session information.
 import datajoint as dj
 from pipeline import reference, subject
 
-schema = dj.schema(dj.config.get('database.prefix', '') + 'action')
+schema = dj.schema(dj.config['custom'].get('database.prefix', '') + 'action')
 
 
 @schema

@@ -27,7 +27,7 @@ related_publications = 'doi:10.1523/JNEUROSCI.3152-17.2018; doi:10.25378/janelia
 ecephys_fs = 25000
 
 # experiment description and keywords - from the abstract
-experiment_description = 'Intracellular and extracellular electrophysiology recordings with optogenetic perturbations performed on mouse anterior lateral motor cortex (ALM) in delay response task.'
+experiment_description = 'Extracellular electrophysiology recordings with optogenetic perturbations performed on mouse anterior lateral motor cortex (ALM) in delay response task.'
 keywords = ['motor planning', 'premotor cortex', 'preparatory activity',
             'short-term memory', 'extracellular electrophysiology', 'intracellular electrophysiology']
 
