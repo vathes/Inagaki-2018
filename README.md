@@ -1,6 +1,6 @@
-# Inagaki et al., 2018, 2019
+# Inagaki et al., 2018 & 2019
 
-Data pipeline for Inagaki et al., 2018, 2019 from Svoboda Lab.
+Data pipeline for Inagaki et al., 2018 & 2019 from Svoboda Lab.
 
 This project presents a DataJoint pipeline design for the data accompanying the papers:
 >Hidehiko K. Inagaki, Lorenzo Fontolan, Sandro Romani & Karel Svoboda. "Discrete Attractor Dynamics Underlies Persistent Activity in the Frontal Cortex" (2019) Nature (https://doi.org/10.1038/s41586-019-0919-7)
@@ -26,7 +26,7 @@ This repository contains the **Python 3.7** code to convert the DataJoint pipeli
 Each NWB file represents one recording session. The conversion script can be found [here](scripts/datajoint_to_nwb.py)
 
 ## Demonstration of the data pipeline
-Data queries and usages are demonstrated in this [Jupyter Notebook](notebooks/Inagaki-2018-examples.ipynb), where several figures from the paper are reproduced. 
+Data queries and usages are demonstrated in this [Jupyter Notebook](notebooks/Inagaki-2018-2019-examples.ipynb), where several figures from the paper are reproduced. 
 
 ## Instruction to execute this pipeline
 
